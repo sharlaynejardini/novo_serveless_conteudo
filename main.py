@@ -66,3 +66,22 @@ def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
 @app.get("/turmas", response_model=list[schemas.TurmaResponse])
 def get_turmas(db: Session = Depends(get_db)):
     return crud.listar_turmas(db)
+
+# ==========================================
+# CRONOGRAMA POR TURMA E BIMESTRE
+# ==========================================
+
+@app.get("/cronograma")
+def get_cronograma(turma_id: str, bimestre: int, db: Session = Depends(get_db)):
+
+    resultados = (
+        db.query(Conteudo)
+        .join(Atribuicao)
+        .filter(
+            Atribuicao.turma_id == turma_id,
+            Conteudo.bimestre == bimestre
+        )
+        .all()
+    )
+
+    return resultados
