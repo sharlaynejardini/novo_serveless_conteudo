@@ -104,6 +104,12 @@ def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
 # CRONOGRAMA POR TURMA E BIMESTRE
 # ==========================================
 
+from sqlalchemy.orm import joinedload
+
+# ==========================================
+# CRONOGRAMA POR TURMA E BIMESTRE
+# ==========================================
+
 @app.get("/cronograma", response_model=list[schemas.ConteudoResponse])
 def get_cronograma(
     turma_id: UUID,
@@ -113,6 +119,12 @@ def get_cronograma(
 
     resultados = (
         db.query(models.Conteudo)
+        .options(
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.disciplina)
+        )
         .join(models.Atribuicao)
         .filter(
             models.Atribuicao.turma_id == turma_id,
