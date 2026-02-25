@@ -2,9 +2,11 @@
 # SCHEMAS.PY
 # ==========================================
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from uuid import UUID
 from datetime import date
+from typing import List, Union
+import json
 
 
 # =========================
@@ -64,7 +66,7 @@ class AtribuicaoResponse(BaseModel):
 class ConteudoCreate(BaseModel):
     atribuicao_id: UUID
     bimestre: int
-    conteudo: str
+    conteudo: Union[str, List[str]]  # aceita string ou lista
     data_avaliacao: date
 
 
@@ -75,9 +77,26 @@ class ConteudoCreate(BaseModel):
 class ConteudoResponse(BaseModel):
     id: UUID
     bimestre: int
-    conteudo: str
+    conteudo: List[str]  # 🔥 agora sempre será lista
     data_avaliacao: date
     atribuicao: AtribuicaoResponse
 
     class Config:
         from_attributes = True
+
+    @field_validator("conteudo", mode="before")
+    @classmethod
+    def converter_para_lista(cls, value):
+        if isinstance(value, list):
+            return value
+
+        if isinstance(value, str):
+            try:
+                convertido = json.loads(value)
+                if isinstance(convertido, list):
+                    return convertido
+                return [convertido]
+            except:
+                return [value]
+
+        return []
