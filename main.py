@@ -2,24 +2,39 @@ from fastapi import FastAPI, Depends, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from uuid import UUID
+
 from database import SessionLocal, engine, Base
 import models
 import schemas
 import crud
 
+# ==========================================
+# CRIAÇÃO DA APLICAÇÃO
+# ==========================================
+
 app = FastAPI()
 
-# 🔥 CORS liberado
+# ==========================================
+# CORS LIBERADO
+# ==========================================
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # depois podemos restringir
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ==========================================
+# CRIA TABELAS (se não existirem)
+# ==========================================
+
 Base.metadata.create_all(bind=engine)
 
+# ==========================================
+# DEPENDÊNCIA DO BANCO
+# ==========================================
 
 def get_db():
     db = SessionLocal()
@@ -28,16 +43,25 @@ def get_db():
     finally:
         db.close()
 
+# ==========================================
+# PROFESSORES
+# ==========================================
 
 @app.get("/professores", response_model=list[schemas.ProfessorResponse])
 def get_professores(db: Session = Depends(get_db)):
     return crud.listar_professores(db)
 
+# ==========================================
+# ATRIBUIÇÕES POR PROFESSOR
+# ==========================================
 
 @app.get("/atribuicoes/{professor_id}", response_model=list[schemas.AtribuicaoResponse])
 def get_atribuicoes(professor_id: UUID, db: Session = Depends(get_db)):
     return crud.listar_atribuicoes_por_professor(db, professor_id)
 
+# ==========================================
+# BUSCAR CONTEÚDO
+# ==========================================
 
 @app.get("/conteudos", response_model=schemas.ConteudoResponse)
 def buscar_conteudo(
@@ -52,34 +76,47 @@ def buscar_conteudo(
 
     return conteudo
 
+# ==========================================
+# SALVAR CONTEÚDO
+# ==========================================
 
 @app.post("/conteudos", response_model=schemas.ConteudoResponse)
 def salvar_conteudo(dados: schemas.ConteudoCreate, db: Session = Depends(get_db)):
     return crud.salvar_conteudo(db, dados)
 
-
-# 🔥 NOVA ROTA DO CALENDÁRIO
-@app.get("/calendario/{turma_id}", response_model=list[schemas.ConteudoResponse])
-def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
-    return crud.buscar_calendario_por_turma(db, turma_id)
+# ==========================================
+# LISTAR TURMAS
+# ==========================================
 
 @app.get("/turmas", response_model=list[schemas.TurmaResponse])
 def get_turmas(db: Session = Depends(get_db)):
     return crud.listar_turmas(db)
 
 # ==========================================
+# CALENDÁRIO POR TURMA
+# ==========================================
+
+@app.get("/calendario/{turma_id}", response_model=list[schemas.ConteudoResponse])
+def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
+    return crud.buscar_calendario_por_turma(db, turma_id)
+
+# ==========================================
 # CRONOGRAMA POR TURMA E BIMESTRE
 # ==========================================
 
-@app.get("/cronograma")
-def get_cronograma(turma_id: str, bimestre: int, db: Session = Depends(get_db)):
+@app.get("/cronograma", response_model=list[schemas.ConteudoResponse])
+def get_cronograma(
+    turma_id: UUID,
+    bimestre: int,
+    db: Session = Depends(get_db)
+):
 
     resultados = (
-        db.query(Conteudo)
-        .join(Atribuicao)
+        db.query(models.Conteudo)
+        .join(models.Atribuicao)
         .filter(
-            Atribuicao.turma_id == turma_id,
-            Conteudo.bimestre == bimestre
+            models.Atribuicao.turma_id == turma_id,
+            models.Conteudo.bimestre == bimestre
         )
         .all()
     )
