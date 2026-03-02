@@ -102,3 +102,45 @@ class ConteudoResponse(BaseModel):
         return []
     
     #teste##
+
+    # =========================
+# TRABALHO CREATE
+# =========================
+
+class TrabalhoCreate(BaseModel):
+    atribuicao_id: UUID
+    conteudo: Union[str, List[str]]
+    instrucoes: str
+    data_entrega: date
+
+
+# =========================
+# TRABALHO RESPONSE
+# =========================
+
+class TrabalhoResponse(BaseModel):
+    id: UUID
+    conteudo: List[str]
+    instrucoes: str
+    data_entrega: date
+    atribuicao: AtribuicaoResponse
+
+    class Config:
+        from_attributes = True
+
+    @field_validator("conteudo", mode="before")
+    @classmethod
+    def converter_para_lista(cls, value):
+        if isinstance(value, list):
+            return value
+
+        if isinstance(value, str):
+            try:
+                convertido = json.loads(value)
+                if isinstance(convertido, list):
+                    return convertido
+                return [convertido]
+            except:
+                return [value]
+
+        return []

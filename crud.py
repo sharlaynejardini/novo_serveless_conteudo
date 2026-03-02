@@ -85,3 +85,60 @@ def buscar_calendario_por_turma(db, turma_id):
 
 def listar_turmas(db):
     return db.query(models.Turma).all()
+
+# ==========================================
+# TRABALHOS
+# ==========================================
+
+def buscar_trabalho(db, atribuicao_id):
+    return (
+        db.query(models.Trabalho)
+        .options(
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.disciplina),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.turma),
+        )
+        .filter(models.Trabalho.atribuicao_id == atribuicao_id)
+        .first()
+    )
+
+
+def salvar_trabalho(db, dados):
+    trabalho = buscar_trabalho(db, dados.atribuicao_id)
+
+    if trabalho:
+        trabalho.conteudo = dados.conteudo
+        trabalho.instrucoes = dados.instrucoes
+        trabalho.data_entrega = dados.data_entrega
+    else:
+        trabalho = models.Trabalho(
+            atribuicao_id=dados.atribuicao_id,
+            conteudo=dados.conteudo,
+            instrucoes=dados.instrucoes,
+            data_entrega=dados.data_entrega
+        )
+        db.add(trabalho)
+
+    db.commit()
+    db.refresh(trabalho)
+
+    return buscar_trabalho(db, dados.atribuicao_id)
+
+
+def buscar_trabalhos_por_turma(db, turma_id):
+    return (
+        db.query(models.Trabalho)
+        .options(
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.disciplina),
+            joinedload(models.Atribuicao.turma),
+        )
+        .join(models.Atribuicao)
+        .filter(models.Atribuicao.turma_id == turma_id)
+        .all()
+    )

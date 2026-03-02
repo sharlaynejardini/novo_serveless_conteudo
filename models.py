@@ -65,3 +65,15 @@ class Conteudo(Base):
     data_avaliacao = Column(Date, nullable=False)
 
     atribuicao = relationship("Atribuicao", back_populates="conteudos")
+
+class Trabalho(Base):
+    __tablename__ = "trabalhos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    atribuicao_id = Column(UUID(as_uuid=True), ForeignKey("atribuicoes.id"))
+    data_entrega = Column(Date, nullable=False)
+    conteudo = Column(Text, nullable=False)
+    instrucoes = Column(Text, nullable=True)
+
+    atribuicao = relationship("Atribuicao")

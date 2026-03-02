@@ -134,3 +134,40 @@ def get_cronograma(
     )
 
     return resultados
+
+# ==========================================
+# BUSCAR TRABALHO
+# ==========================================
+
+@app.get("/trabalhos", response_model=schemas.TrabalhoResponse)
+def buscar_trabalho(
+    atribuicao_id: UUID = Query(...),
+    db: Session = Depends(get_db)
+):
+    trabalho = crud.buscar_trabalho(db, atribuicao_id)
+
+    if not trabalho:
+        raise HTTPException(status_code=404, detail="Trabalho não encontrado")
+
+    return trabalho
+
+
+# ==========================================
+# SALVAR TRABALHO
+# ==========================================
+
+@app.post("/trabalhos", response_model=schemas.TrabalhoResponse)
+def salvar_trabalho(dados: schemas.TrabalhoCreate, db: Session = Depends(get_db)):
+    return crud.salvar_trabalho(db, dados)
+
+
+# ==========================================
+# CRONOGRAMA DE TRABALHOS
+# ==========================================
+
+@app.get("/cronograma-trabalhos", response_model=list[schemas.TrabalhoResponse])
+def get_cronograma_trabalhos(
+    turma_id: UUID,
+    db: Session = Depends(get_db)
+):
+    return crud.buscar_trabalhos_por_turma(db, turma_id)
