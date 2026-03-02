@@ -136,9 +136,10 @@ def buscar_trabalhos_por_turma(db, turma_id):
             .joinedload(models.Atribuicao.professor),
             joinedload(models.Trabalho.atribuicao)
             .joinedload(models.Atribuicao.disciplina),
-            joinedload(models.Atribuicao.turma),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.turma),
         )
-        .join(models.Atribuicao)
+        .join(models.Atribuicao, models.Trabalho.atribuicao_id == models.Atribuicao.id)
         .filter(models.Atribuicao.turma_id == turma_id)
         .all()
     )
