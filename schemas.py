@@ -109,6 +109,7 @@ class ConteudoResponse(BaseModel):
 
 class TrabalhoCreate(BaseModel):
     atribuicao_id: UUID
+    bimestre: int  # 🔥 NOVO
     conteudo: Union[str, List[str]]
     instrucoes: str
     data_entrega: date
@@ -120,6 +121,7 @@ class TrabalhoCreate(BaseModel):
 
 class TrabalhoResponse(BaseModel):
     id: UUID
+    bimestre: int  # 🔥 NOVO
     conteudo: List[str]
     instrucoes: str
     data_entrega: date

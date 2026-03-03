@@ -107,7 +107,14 @@ def buscar_trabalho(db, atribuicao_id):
 
 
 def salvar_trabalho(db, dados):
-    trabalho = buscar_trabalho(db, dados.atribuicao_id)
+    trabalho = (
+        db.query(models.Trabalho)
+        .filter(
+            models.Trabalho.atribuicao_id == dados.atribuicao_id,
+            models.Trabalho.bimestre == dados.bimestre
+        )
+        .first()
+    )
 
     if trabalho:
         trabalho.conteudo = dados.conteudo
@@ -116,6 +123,7 @@ def salvar_trabalho(db, dados):
     else:
         trabalho = models.Trabalho(
             atribuicao_id=dados.atribuicao_id,
+            bimestre=dados.bimestre,
             conteudo=dados.conteudo,
             instrucoes=dados.instrucoes,
             data_entrega=dados.data_entrega
@@ -125,10 +133,10 @@ def salvar_trabalho(db, dados):
     db.commit()
     db.refresh(trabalho)
 
-    return buscar_trabalho(db, dados.atribuicao_id)
+    return trabalho
 
 
-def buscar_trabalhos_por_turma(db, turma_id):
+def buscar_trabalhos_por_turma(db, turma_id, bimestre):
     return (
         db.query(models.Trabalho)
         .options(
@@ -139,7 +147,10 @@ def buscar_trabalhos_por_turma(db, turma_id):
             joinedload(models.Trabalho.atribuicao)
             .joinedload(models.Atribuicao.turma),
         )
-        .join(models.Atribuicao, models.Trabalho.atribuicao_id == models.Atribuicao.id)
-        .filter(models.Atribuicao.turma_id == turma_id)
+        .join(models.Atribuicao)
+        .filter(
+            models.Atribuicao.turma_id == turma_id,
+            models.Trabalho.bimestre == bimestre  # 🔥 FILTRO AQUI
+        )
         .all()
     )

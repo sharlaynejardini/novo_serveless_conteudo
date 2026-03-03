@@ -168,6 +168,7 @@ def salvar_trabalho(dados: schemas.TrabalhoCreate, db: Session = Depends(get_db)
 @app.get("/cronograma-trabalhos", response_model=list[schemas.TrabalhoResponse])
 def get_cronograma_trabalhos(
     turma_id: UUID,
+    bimestre: int,
     db: Session = Depends(get_db)
 ):
-    return crud.buscar_trabalhos_por_turma(db, turma_id)
+    return crud.buscar_trabalhos_por_turma(db, turma_id, bimestre)

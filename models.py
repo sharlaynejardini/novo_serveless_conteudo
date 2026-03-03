@@ -72,8 +72,10 @@ class Trabalho(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     atribuicao_id = Column(UUID(as_uuid=True), ForeignKey("atribuicoes.id"))
-    data_entrega = Column(Date, nullable=False)
+    bimestre = Column(Integer, nullable=False)  # 🔥 NOVO CAMPO
+
     conteudo = Column(Text, nullable=False)
     instrucoes = Column(Text, nullable=True)
+    data_entrega = Column(Date, nullable=False)
 
     atribuicao = relationship("Atribuicao")
