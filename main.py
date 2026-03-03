@@ -142,9 +142,10 @@ def get_cronograma(
 @app.get("/trabalhos", response_model=schemas.TrabalhoResponse)
 def buscar_trabalho(
     atribuicao_id: UUID = Query(...),
+    bimestre: int = Query(...),
     db: Session = Depends(get_db)
 ):
-    trabalho = crud.buscar_trabalho(db, atribuicao_id)
+    trabalho = crud.buscar_trabalho(db, atribuicao_id, bimestre)
 
     if not trabalho:
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")

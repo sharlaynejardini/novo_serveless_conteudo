@@ -90,7 +90,7 @@ def listar_turmas(db):
 # TRABALHOS
 # ==========================================
 
-def buscar_trabalho(db, atribuicao_id):
+def buscar_trabalho(db, atribuicao_id, bimestre):
     return (
         db.query(models.Trabalho)
         .options(
@@ -101,10 +101,12 @@ def buscar_trabalho(db, atribuicao_id):
             joinedload(models.Trabalho.atribuicao)
             .joinedload(models.Atribuicao.turma),
         )
-        .filter(models.Trabalho.atribuicao_id == atribuicao_id)
+        .filter(
+            models.Trabalho.atribuicao_id == atribuicao_id,
+            models.Trabalho.bimestre == bimestre
+        )
         .first()
     )
-
 
 def salvar_trabalho(db, dados):
     trabalho = (
