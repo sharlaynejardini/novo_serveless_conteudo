@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Depends, Query, HTTPException
+from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -20,14 +21,22 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # depois podemos restringir
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # ==========================================
-# CRIA TABELAS (se não existirem)
+# HANDLER OPTIONS (NECESSÁRIO NA VERCEL)
+# ==========================================
+
+@app.options("/{rest_of_path:path}")
+async def options_handler(request: Request, rest_of_path: str):
+    return JSONResponse(content={"message": "ok"})
+
+# ==========================================
+# CRIA TABELAS
 # ==========================================
 
 Base.metadata.create_all(bind=engine)
@@ -52,7 +61,7 @@ def get_professores(db: Session = Depends(get_db)):
     return crud.listar_professores(db)
 
 # ==========================================
-# ATRIBUIÇÕES POR PROFESSOR
+# ATRIBUIÇÕES
 # ==========================================
 
 @app.get("/atribuicoes/{professor_id}", response_model=list[schemas.AtribuicaoResponse])
@@ -69,6 +78,7 @@ def buscar_conteudo(
     bimestre: int = Query(...),
     db: Session = Depends(get_db)
 ):
+
     conteudo = crud.buscar_conteudo(db, atribuicao_id, bimestre)
 
     if not conteudo:
@@ -101,14 +111,10 @@ def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
     return crud.buscar_calendario_por_turma(db, turma_id)
 
 # ==========================================
-# CRONOGRAMA POR TURMA E BIMESTRE
+# CRONOGRAMA AVALIAÇÕES
 # ==========================================
 
 from sqlalchemy.orm import joinedload
-
-# ==========================================
-# CRONOGRAMA POR TURMA E BIMESTRE
-# ==========================================
 
 @app.get("/cronograma", response_model=list[schemas.ConteudoResponse])
 def get_cronograma(
@@ -145,13 +151,13 @@ def buscar_trabalho(
     bimestre: int = Query(...),
     db: Session = Depends(get_db)
 ):
+
     trabalho = crud.buscar_trabalho(db, atribuicao_id, bimestre)
 
     if not trabalho:
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")
 
     return trabalho
-
 
 # ==========================================
 # SALVAR TRABALHO
@@ -161,9 +167,8 @@ def buscar_trabalho(
 def salvar_trabalho(dados: schemas.TrabalhoCreate, db: Session = Depends(get_db)):
     return crud.salvar_trabalho(db, dados)
 
-
 # ==========================================
-# CRONOGRAMA DE TRABALHOS
+# CRONOGRAMA TRABALHOS
 # ==========================================
 
 @app.get("/cronograma-trabalhos", response_model=list[schemas.TrabalhoResponse])
@@ -184,12 +189,36 @@ def excluir_conteudo(
     db: Session = Depends(get_db)
 ):
 
-    resultado = crud.excluir_conteudo(db, conteudo_id)
+    conteudo = db.query(models.Conteudo).filter(
+        models.Conteudo.id == conteudo_id
+    ).first()
 
-    if not resultado:
-        raise HTTPException(
-            status_code=404,
-            detail="Conteúdo não encontrado"
-        )
+    if not conteudo:
+        raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
+
+    db.delete(conteudo)
+    db.commit()
 
     return {"message": "Avaliação excluída com sucesso"}
+
+# ==========================================
+# EXCLUIR TRABALHO
+# ==========================================
+
+@app.delete("/trabalhos/{trabalho_id}")
+def excluir_trabalho(
+    trabalho_id: UUID,
+    db: Session = Depends(get_db)
+):
+
+    trabalho = db.query(models.Trabalho).filter(
+        models.Trabalho.id == trabalho_id
+    ).first()
+
+    if not trabalho:
+        raise HTTPException(status_code=404, detail="Trabalho não encontrado")
+
+    db.delete(trabalho)
+    db.commit()
+
+    return {"message": "Trabalho excluído com sucesso"}

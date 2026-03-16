@@ -1,7 +1,3 @@
-# ==========================================
-# CRUD.PY
-# ==========================================
-
 import models
 from sqlalchemy.orm import joinedload
 
@@ -43,6 +39,7 @@ def buscar_conteudo(db, atribuicao_id, bimestre):
 
 
 def salvar_conteudo(db, dados):
+
     conteudo = buscar_conteudo(db, dados.atribuicao_id, dados.bimestre)
 
     if conteudo:
@@ -89,19 +86,116 @@ def listar_turmas(db):
 
 
 # ==========================================
-# NOVO: EXCLUIR CONTEÚDO
+# TRABALHOS
+# ==========================================
+
+def buscar_trabalho(db, atribuicao_id, bimestre):
+    return (
+        db.query(models.Trabalho)
+        .options(
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.disciplina),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.turma),
+        )
+        .filter(
+            models.Trabalho.atribuicao_id == atribuicao_id,
+            models.Trabalho.bimestre == bimestre
+        )
+        .first()
+    )
+
+
+def salvar_trabalho(db, dados):
+
+    trabalho = (
+        db.query(models.Trabalho)
+        .filter(
+            models.Trabalho.atribuicao_id == dados.atribuicao_id,
+            models.Trabalho.bimestre == dados.bimestre
+        )
+        .first()
+    )
+
+    if trabalho:
+        trabalho.conteudo = dados.conteudo
+        trabalho.instrucoes = dados.instrucoes
+        trabalho.data_entrega = dados.data_entrega
+    else:
+        trabalho = models.Trabalho(
+            atribuicao_id=dados.atribuicao_id,
+            bimestre=dados.bimestre,
+            conteudo=dados.conteudo,
+            instrucoes=dados.instrucoes,
+            data_entrega=dados.data_entrega
+        )
+        db.add(trabalho)
+
+    db.commit()
+    db.refresh(trabalho)
+
+    return trabalho
+
+
+def buscar_trabalhos_por_turma(db, turma_id, bimestre):
+    return (
+        db.query(models.Trabalho)
+        .options(
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.disciplina),
+            joinedload(models.Trabalho.atribuicao)
+            .joinedload(models.Atribuicao.turma),
+        )
+        .join(models.Atribuicao)
+        .filter(
+            models.Atribuicao.turma_id == turma_id,
+            models.Trabalho.bimestre == bimestre
+        )
+        .all()
+    )
+
+
+# ==========================================
+# EXCLUIR CONTEÚDO (AVALIAÇÃO)
 # ==========================================
 
 def excluir_conteudo(db, conteudo_id):
 
-    conteudo = db.query(models.Conteudo).filter(
-        models.Conteudo.id == conteudo_id
-    ).first()
+    conteudo = (
+        db.query(models.Conteudo)
+        .filter(models.Conteudo.id == conteudo_id)
+        .first()
+    )
 
     if not conteudo:
-        return None
+        return False
 
     db.delete(conteudo)
+    db.commit()
+
+    return True
+
+
+# ==========================================
+# EXCLUIR TRABALHO
+# ==========================================
+
+def excluir_trabalho(db, trabalho_id):
+
+    trabalho = (
+        db.query(models.Trabalho)
+        .filter(models.Trabalho.id == trabalho_id)
+        .first()
+    )
+
+    if not trabalho:
+        return False
+
+    db.delete(trabalho)
     db.commit()
 
     return True
