@@ -79,6 +79,7 @@ def buscar_calendario_por_turma(db, turma_id):
         .all()
     )
 
+
 # =========================
 # LISTAR TODAS AS TURMAS
 # =========================
@@ -86,73 +87,21 @@ def buscar_calendario_por_turma(db, turma_id):
 def listar_turmas(db):
     return db.query(models.Turma).all()
 
+
 # ==========================================
-# TRABALHOS
+# NOVO: EXCLUIR CONTEÚDO
 # ==========================================
 
-def buscar_trabalho(db, atribuicao_id, bimestre):
-    return (
-        db.query(models.Trabalho)
-        .options(
-            joinedload(models.Trabalho.atribuicao)
-            .joinedload(models.Atribuicao.professor),
-            joinedload(models.Trabalho.atribuicao)
-            .joinedload(models.Atribuicao.disciplina),
-            joinedload(models.Trabalho.atribuicao)
-            .joinedload(models.Atribuicao.turma),
-        )
-        .filter(
-            models.Trabalho.atribuicao_id == atribuicao_id,
-            models.Trabalho.bimestre == bimestre
-        )
-        .first()
-    )
+def excluir_conteudo(db, conteudo_id):
 
-def salvar_trabalho(db, dados):
-    trabalho = (
-        db.query(models.Trabalho)
-        .filter(
-            models.Trabalho.atribuicao_id == dados.atribuicao_id,
-            models.Trabalho.bimestre == dados.bimestre
-        )
-        .first()
-    )
+    conteudo = db.query(models.Conteudo).filter(
+        models.Conteudo.id == conteudo_id
+    ).first()
 
-    if trabalho:
-        trabalho.conteudo = dados.conteudo
-        trabalho.instrucoes = dados.instrucoes
-        trabalho.data_entrega = dados.data_entrega
-    else:
-        trabalho = models.Trabalho(
-            atribuicao_id=dados.atribuicao_id,
-            bimestre=dados.bimestre,
-            conteudo=dados.conteudo,
-            instrucoes=dados.instrucoes,
-            data_entrega=dados.data_entrega
-        )
-        db.add(trabalho)
+    if not conteudo:
+        return None
 
+    db.delete(conteudo)
     db.commit()
-    db.refresh(trabalho)
 
-    return trabalho
-
-
-def buscar_trabalhos_por_turma(db, turma_id, bimestre):
-    return (
-        db.query(models.Trabalho)
-        .options(
-            joinedload(models.Trabalho.atribuicao)
-            .joinedload(models.Atribuicao.professor),
-            joinedload(models.Trabalho.atribuicao)
-            .joinedload(models.Atribuicao.disciplina),
-            joinedload(models.Trabalho.atribuicao)
-            .joinedload(models.Atribuicao.turma),
-        )
-        .join(models.Atribuicao)
-        .filter(
-            models.Atribuicao.turma_id == turma_id,
-            models.Trabalho.bimestre == bimestre  # 🔥 FILTRO AQUI
-        )
-        .all()
-    )
+    return True

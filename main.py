@@ -173,3 +173,23 @@ def get_cronograma_trabalhos(
     db: Session = Depends(get_db)
 ):
     return crud.buscar_trabalhos_por_turma(db, turma_id, bimestre)
+
+# ==========================================
+# EXCLUIR AVALIAÇÃO
+# ==========================================
+
+@app.delete("/conteudos/{conteudo_id}")
+def excluir_conteudo(
+    conteudo_id: UUID,
+    db: Session = Depends(get_db)
+):
+
+    resultado = crud.excluir_conteudo(db, conteudo_id)
+
+    if not resultado:
+        raise HTTPException(
+            status_code=404,
+            detail="Conteúdo não encontrado"
+        )
+
+    return {"message": "Avaliação excluída com sucesso"}
