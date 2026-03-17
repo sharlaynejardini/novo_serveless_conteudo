@@ -399,3 +399,32 @@ def get_todas_atribuicoes(
         )
         .all()
     )
+
+# ==========================================
+# CRIAR ATRIBUIÇÃO
+# ==========================================
+
+@app.post("/atribuicoes", response_model=schemas.AtribuicaoResponse)
+def criar_atribuicao(
+    dados: schemas.AtribuicaoCreate,
+    db: Session = Depends(get_db)
+):
+    return crud.criar_atribuicao(db, dados)
+
+
+# ==========================================
+# DELETAR ATRIBUIÇÃO
+# ==========================================
+
+@app.delete("/atribuicoes/{atribuicao_id}")
+def deletar_atribuicao(
+    atribuicao_id: UUID,
+    db: Session = Depends(get_db)
+):
+
+    ok = crud.deletar_atribuicao(db, atribuicao_id)
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="Atribuição não encontrada")
+
+    return {"message": "Atribuição excluída"}

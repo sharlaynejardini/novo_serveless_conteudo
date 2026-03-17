@@ -296,3 +296,44 @@ def listar_todas_atribuicoes(db):
         )
         .all()
     )
+
+# =========================
+# ATRIBUIÇÃO CREATE
+# =========================
+
+# ==========================================
+# CRIAR ATRIBUIÇÃO
+# ==========================================
+
+def criar_atribuicao(db, dados):
+
+    atribuicao = models.Atribuicao(
+        professor_id=dados.professor_id,
+        turma_id=dados.turma_id,
+        disciplina_id=dados.disciplina_id
+    )
+
+    db.add(atribuicao)
+    db.commit()
+    db.refresh(atribuicao)
+
+    return atribuicao
+
+
+# ==========================================
+# DELETAR ATRIBUIÇÃO
+# ==========================================
+
+def deletar_atribuicao(db, id):
+
+    atribuicao = db.query(models.Atribuicao)\
+        .filter(models.Atribuicao.id == id)\
+        .first()
+
+    if not atribuicao:
+        return False
+
+    db.delete(atribuicao)
+    db.commit()
+
+    return True

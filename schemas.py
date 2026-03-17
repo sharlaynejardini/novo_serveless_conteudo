@@ -176,3 +176,13 @@ class TurmaCreate(BaseModel):
 
 class DisciplinaCreate(BaseModel):
     nome: str
+
+
+# =========================
+# ATRIBUIÇÃO CREATE
+# =========================
+
+class AtribuicaoCreate(BaseModel):
+    professor_id: UUID
+    turma_id: UUID
+    disciplina_id: UUID
