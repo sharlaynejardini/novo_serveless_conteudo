@@ -285,3 +285,14 @@ def deletar_disciplina(db, id):
     db.delete(disc)
     db.commit()
     return True
+
+def listar_todas_atribuicoes(db):
+    return (
+        db.query(models.Atribuicao)
+        .options(
+            joinedload(models.Atribuicao.professor),
+            joinedload(models.Atribuicao.turma),
+            joinedload(models.Atribuicao.disciplina)
+        )
+        .all()
+    )

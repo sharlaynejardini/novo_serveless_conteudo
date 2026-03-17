@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
+
 import jwt
 
 from database import SessionLocal, engine, Base
@@ -379,11 +380,22 @@ def deletar_disciplina(disciplina_id: UUID, db: Session = Depends(get_db)):
 
     return {"message": "Disciplina excluída"}
 
-@app.get("/atribuicoes")
-def listar_todas(db: Session = Depends(get_db)):
-    return db.query(models.Atribuicao)\
+# ==========================================
+# NOVA ROTA - TODAS ATRIBUIÇÕES (OTIMIZADA)
+# ==========================================
+
+from sqlalchemy.orm import joinedload
+
+@app.get("/atribuicoes", response_model=list[schemas.AtribuicaoResponse])
+def get_todas_atribuicoes(
+    db: Session = Depends(get_db)
+):
+    return (
+        db.query(models.Atribuicao)
         .options(
             joinedload(models.Atribuicao.professor),
             joinedload(models.Atribuicao.turma),
             joinedload(models.Atribuicao.disciplina)
-        ).all()
+        )
+        .all()
+    )
