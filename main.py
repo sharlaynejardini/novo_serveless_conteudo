@@ -40,7 +40,10 @@ def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(s
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://conteudosessenciais-takaoka-2026.vercel.app",
+        "http://localhost:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
