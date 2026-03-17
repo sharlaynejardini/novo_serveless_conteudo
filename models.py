@@ -14,6 +14,7 @@ class Professor(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nome = Column(String, nullable=False, unique=True)
+    email = Column(String, nullable=True, unique=True)
 
     atribuicoes = relationship("Atribuicao", back_populates="professor")
 

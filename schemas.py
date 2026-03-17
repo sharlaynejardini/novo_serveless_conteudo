@@ -16,6 +16,7 @@ import json
 class ProfessorResponse(BaseModel):
     id: UUID
     nome: str
+    email: str | None
 
     class Config:
         from_attributes = True
