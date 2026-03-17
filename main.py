@@ -1,22 +1,41 @@
 from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from uuid import UUID
+import jwt
 
 from database import SessionLocal, engine, Base
 import models
 import schemas
 import crud
 
-# ==========================================
-# CRIAÇÃO DA APLICAÇÃO
-# ==========================================
-
 app = FastAPI()
 
 # ==========================================
-# CORS LIBERADO
+# 🔒 SEGURANÇA TOKEN SUPABASE
+# ==========================================
+
+security = HTTPBearer()
+
+def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(token, options={"verify_signature": False})
+        email = payload.get("email")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Email não encontrado")
+
+        return email
+
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido")
+
+# ==========================================
+# CORS
 # ==========================================
 
 app.add_middleware(
@@ -27,23 +46,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
-# HANDLER OPTIONS (NECESSÁRIO NA VERCEL)
-# ==========================================
-
 @app.options("/{rest_of_path:path}")
 async def options_handler(request: Request, rest_of_path: str):
     return JSONResponse(content={"message": "ok"})
 
-# ==========================================
-# CRIA TABELAS
-# ==========================================
-
 Base.metadata.create_all(bind=engine)
-
-# ==========================================
-# DEPENDÊNCIA DO BANCO
-# ==========================================
 
 def get_db():
     db = SessionLocal()
@@ -61,134 +68,74 @@ def get_professores(db: Session = Depends(get_db)):
     return crud.listar_professores(db)
 
 # ==========================================
-# ATRIBUIÇÕES
+# ATRIBUIÇÕES (PROTEGIDO 🔒)
 # ==========================================
 
 @app.get("/atribuicoes/{professor_id}", response_model=list[schemas.AtribuicaoResponse])
-def get_atribuicoes(professor_id: UUID, db: Session = Depends(get_db)):
+def get_atribuicoes(
+    professor_id: UUID,
+    email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    professor = db.query(models.Professor).filter(models.Professor.email == email).first()
+
+    if not professor or professor.id != professor_id:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+
     return crud.listar_atribuicoes_por_professor(db, professor_id)
 
 # ==========================================
-# BUSCAR CONTEÚDO
-# ==========================================
-
-@app.get("/conteudos", response_model=schemas.ConteudoResponse)
-def buscar_conteudo(
-    atribuicao_id: UUID = Query(...),
-    bimestre: int = Query(...),
-    db: Session = Depends(get_db)
-):
-
-    conteudo = crud.buscar_conteudo(db, atribuicao_id, bimestre)
-
-    if not conteudo:
-        raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
-
-    return conteudo
-
-# ==========================================
-# SALVAR CONTEÚDO
+# SALVAR CONTEÚDO (PROTEGIDO 🔒)
 # ==========================================
 
 @app.post("/conteudos", response_model=schemas.ConteudoResponse)
-def salvar_conteudo(dados: schemas.ConteudoCreate, db: Session = Depends(get_db)):
+def salvar_conteudo(
+    dados: schemas.ConteudoCreate,
+    email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    professor = db.query(models.Professor).filter(models.Professor.email == email).first()
+
+    atribuicao = db.query(models.Atribuicao).filter(
+        models.Atribuicao.id == dados.atribuicao_id
+    ).first()
+
+    if not atribuicao or atribuicao.professor_id != professor.id:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+
     return crud.salvar_conteudo(db, dados)
 
 # ==========================================
-# LISTAR TURMAS
-# ==========================================
-
-@app.get("/turmas", response_model=list[schemas.TurmaResponse])
-def get_turmas(db: Session = Depends(get_db)):
-    return crud.listar_turmas(db)
-
-# ==========================================
-# CALENDÁRIO POR TURMA
-# ==========================================
-
-@app.get("/calendario/{turma_id}", response_model=list[schemas.ConteudoResponse])
-def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
-    return crud.buscar_calendario_por_turma(db, turma_id)
-
-# ==========================================
-# CRONOGRAMA AVALIAÇÕES
-# ==========================================
-
-from sqlalchemy.orm import joinedload
-
-@app.get("/cronograma", response_model=list[schemas.ConteudoResponse])
-def get_cronograma(
-    turma_id: UUID,
-    bimestre: int,
-    db: Session = Depends(get_db)
-):
-
-    resultados = (
-        db.query(models.Conteudo)
-        .options(
-            joinedload(models.Conteudo.atribuicao)
-            .joinedload(models.Atribuicao.professor),
-            joinedload(models.Conteudo.atribuicao)
-            .joinedload(models.Atribuicao.disciplina)
-        )
-        .join(models.Atribuicao)
-        .filter(
-            models.Atribuicao.turma_id == turma_id,
-            models.Conteudo.bimestre == bimestre
-        )
-        .all()
-    )
-
-    return resultados
-
-# ==========================================
-# BUSCAR TRABALHO
-# ==========================================
-
-@app.get("/trabalhos", response_model=schemas.TrabalhoResponse)
-def buscar_trabalho(
-    atribuicao_id: UUID = Query(...),
-    bimestre: int = Query(...),
-    db: Session = Depends(get_db)
-):
-
-    trabalho = crud.buscar_trabalho(db, atribuicao_id, bimestre)
-
-    if not trabalho:
-        raise HTTPException(status_code=404, detail="Trabalho não encontrado")
-
-    return trabalho
-
-# ==========================================
-# SALVAR TRABALHO
+# SALVAR TRABALHO (PROTEGIDO 🔒)
 # ==========================================
 
 @app.post("/trabalhos", response_model=schemas.TrabalhoResponse)
-def salvar_trabalho(dados: schemas.TrabalhoCreate, db: Session = Depends(get_db)):
+def salvar_trabalho(
+    dados: schemas.TrabalhoCreate,
+    email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    professor = db.query(models.Professor).filter(models.Professor.email == email).first()
+
+    atribuicao = db.query(models.Atribuicao).filter(
+        models.Atribuicao.id == dados.atribuicao_id
+    ).first()
+
+    if not atribuicao or atribuicao.professor_id != professor.id:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+
     return crud.salvar_trabalho(db, dados)
 
 # ==========================================
-# CRONOGRAMA TRABALHOS
-# ==========================================
-
-@app.get("/cronograma-trabalhos", response_model=list[schemas.TrabalhoResponse])
-def get_cronograma_trabalhos(
-    turma_id: UUID,
-    bimestre: int,
-    db: Session = Depends(get_db)
-):
-    return crud.buscar_trabalhos_por_turma(db, turma_id, bimestre)
-
-# ==========================================
-# EXCLUIR AVALIAÇÃO
+# EXCLUIR CONTEÚDO (PROTEGIDO 🔒)
 # ==========================================
 
 @app.delete("/conteudos/{conteudo_id}")
 def excluir_conteudo(
     conteudo_id: UUID,
+    email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-
     conteudo = db.query(models.Conteudo).filter(
         models.Conteudo.id == conteudo_id
     ).first()
@@ -196,27 +143,33 @@ def excluir_conteudo(
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
 
+    if conteudo.atribuicao.professor.email != email:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+
     db.delete(conteudo)
     db.commit()
 
     return {"message": "Avaliação excluída com sucesso"}
 
 # ==========================================
-# EXCLUIR TRABALHO
+# EXCLUIR TRABALHO (PROTEGIDO 🔒)
 # ==========================================
 
 @app.delete("/trabalhos/{trabalho_id}")
 def excluir_trabalho(
     trabalho_id: UUID,
+    email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
-
     trabalho = db.query(models.Trabalho).filter(
         models.Trabalho.id == trabalho_id
     ).first()
 
     if not trabalho:
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")
+
+    if trabalho.atribuicao.professor.email != email:
+        raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(trabalho)
     db.commit()
