@@ -378,3 +378,12 @@ def deletar_disciplina(disciplina_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Disciplina não encontrada")
 
     return {"message": "Disciplina excluída"}
+
+@app.get("/atribuicoes")
+def listar_todas(db: Session = Depends(get_db)):
+    return db.query(models.Atribuicao)\
+        .options(
+            joinedload(models.Atribuicao.professor),
+            joinedload(models.Atribuicao.turma),
+            joinedload(models.Atribuicao.disciplina)
+        ).all()
