@@ -199,3 +199,89 @@ def excluir_trabalho(db, trabalho_id):
     db.commit()
 
     return True
+
+# ==========================================
+# PROFESSORES CRUD
+# ==========================================
+
+def criar_professor(db, dados):
+    prof = models.Professor(nome=dados.nome, email=dados.email)
+    db.add(prof)
+    db.commit()
+    db.refresh(prof)
+    return prof
+
+
+def atualizar_professor(db, id, dados):
+    prof = db.query(models.Professor).filter(models.Professor.id == id).first()
+
+    if not prof:
+        return None
+
+    prof.nome = dados.nome
+    prof.email = dados.email
+
+    db.commit()
+    db.refresh(prof)
+    return prof
+
+
+def deletar_professor(db, id):
+    prof = db.query(models.Professor).filter(models.Professor.id == id).first()
+
+    if not prof:
+        return False
+
+    db.delete(prof)
+    db.commit()
+    return True
+
+
+# ==========================================
+# TURMAS CRUD
+# ==========================================
+
+def criar_turma(db, dados):
+    turma = models.Turma(nome=dados.nome)
+    db.add(turma)
+    db.commit()
+    db.refresh(turma)
+    return turma
+
+
+def deletar_turma(db, id):
+    turma = db.query(models.Turma).filter(models.Turma.id == id).first()
+
+    if not turma:
+        return False
+
+    db.delete(turma)
+    db.commit()
+    return True
+
+
+# ==========================================
+# DISCIPLINAS CRUD
+# ==========================================
+
+def listar_disciplinas(db):
+    return db.query(models.Disciplina).all()
+
+
+def criar_disciplina(db, dados):
+    disc = models.Disciplina(nome=dados.nome)
+    db.add(disc)
+    db.commit()
+    db.refresh(disc)
+    return disc
+
+
+def deletar_disciplina(db, id):
+    disc = db.query(models.Disciplina).filter(models.Disciplina.id == id).first()
+
+    if not disc:
+        return False
+
+    db.delete(disc)
+    db.commit()
+    return True

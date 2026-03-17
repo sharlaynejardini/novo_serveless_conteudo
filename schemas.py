@@ -147,3 +147,32 @@ class TrabalhoResponse(BaseModel):
                 return [value]
 
         return []
+    
+    # =========================
+# CREATE PROFESSOR
+# =========================
+
+class ProfessorCreate(BaseModel):
+    nome: str
+    email: str
+
+
+class ProfessorUpdate(BaseModel):
+    nome: str
+    email: str
+
+
+# =========================
+# TURMA CREATE
+# =========================
+
+class TurmaCreate(BaseModel):
+    nome: str
+
+
+# =========================
+# DISCIPLINA CREATE
+# =========================
+
+class DisciplinaCreate(BaseModel):
+    nome: str

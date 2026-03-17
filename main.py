@@ -307,3 +307,74 @@ def excluir_trabalho(
     db.commit()
 
     return {"message": "Trabalho excluído com sucesso"}
+
+# ==========================================
+# PROFESSORES CRUD
+# ==========================================
+
+@app.post("/professores", response_model=schemas.ProfessorResponse)
+def criar_professor(dados: schemas.ProfessorCreate, db: Session = Depends(get_db)):
+    return crud.criar_professor(db, dados)
+
+
+@app.put("/professores/{professor_id}", response_model=schemas.ProfessorResponse)
+def atualizar_professor(professor_id: UUID, dados: schemas.ProfessorUpdate, db: Session = Depends(get_db)):
+    prof = crud.atualizar_professor(db, professor_id, dados)
+
+    if not prof:
+        raise HTTPException(status_code=404, detail="Professor não encontrado")
+
+    return prof
+
+
+@app.delete("/professores/{professor_id}")
+def deletar_professor(professor_id: UUID, db: Session = Depends(get_db)):
+    ok = crud.deletar_professor(db, professor_id)
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="Professor não encontrado")
+
+    return {"message": "Professor excluído"}
+
+
+# ==========================================
+# TURMAS CRUD
+# ==========================================
+
+@app.post("/turmas")
+def criar_turma(dados: schemas.TurmaCreate, db: Session = Depends(get_db)):
+    return crud.criar_turma(db, dados)
+
+
+@app.delete("/turmas/{turma_id}")
+def deletar_turma(turma_id: UUID, db: Session = Depends(get_db)):
+    ok = crud.deletar_turma(db, turma_id)
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="Turma não encontrada")
+
+    return {"message": "Turma excluída"}
+
+
+# ==========================================
+# DISCIPLINAS CRUD
+# ==========================================
+
+@app.get("/disciplinas", response_model=list[schemas.DisciplinaResponse])
+def get_disciplinas(db: Session = Depends(get_db)):
+    return crud.listar_disciplinas(db)
+
+
+@app.post("/disciplinas")
+def criar_disciplina(dados: schemas.DisciplinaCreate, db: Session = Depends(get_db)):
+    return crud.criar_disciplina(db, dados)
+
+
+@app.delete("/disciplinas/{disciplina_id}")
+def deletar_disciplina(disciplina_id: UUID, db: Session = Depends(get_db)):
+    ok = crud.deletar_disciplina(db, disciplina_id)
+
+    if not ok:
+        raise HTTPException(status_code=404, detail="Disciplina não encontrada")
+
+    return {"message": "Disciplina excluída"}
