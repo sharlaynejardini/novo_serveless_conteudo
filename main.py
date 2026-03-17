@@ -12,10 +12,16 @@ import schemas
 import crud
 
 # ==========================================
-# CRIAÇÃO DA APLICAÇÃO
+# APP
 # ==========================================
 
 app = FastAPI()
+
+# ==========================================
+# 🔥 ADMIN
+# ==========================================
+
+ADMIN_EMAIL = "sharlayne.fonseca@professor.barueri.br"
 
 # ==========================================
 # 🔒 SEGURANÇA TOKEN SUPABASE
@@ -25,7 +31,7 @@ security = HTTPBearer(auto_error=False)
 
 def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not credentials:
-        return None  # 🔥 não quebra rotas públicas
+        return None
 
     token = credentials.credentials
 
@@ -36,16 +42,14 @@ def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(s
             algorithms=["HS256"]
         )
 
-        email = payload.get("email")
-
-        return email
+        return payload.get("email")
 
     except Exception as e:
         print("🔥 ERRO TOKEN:", str(e))
-        return None  # 🔥 evita crash na Vercel
+        return None
 
 # ==========================================
-# CORS (CORRIGIDO)
+# CORS
 # ==========================================
 
 app.add_middleware(
@@ -89,7 +93,7 @@ def get_professores(db: Session = Depends(get_db)):
     return crud.listar_professores(db)
 
 # ==========================================
-# ATRIBUIÇÕES (PROTEGIDO 🔒)
+# ATRIBUIÇÕES
 # ==========================================
 
 @app.get("/atribuicoes/{professor_id}", response_model=list[schemas.AtribuicaoResponse])
@@ -100,6 +104,10 @@ def get_atribuicoes(
 ):
     if not email:
         raise HTTPException(status_code=401, detail="Não autenticado")
+
+    # 🔥 ADMIN pode tudo
+    if email == ADMIN_EMAIL:
+        return crud.listar_atribuicoes_por_professor(db, professor_id)
 
     professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
@@ -126,7 +134,7 @@ def buscar_conteudo(
     return conteudo
 
 # ==========================================
-# SALVAR CONTEÚDO (PROTEGIDO 🔒)
+# SALVAR CONTEÚDO
 # ==========================================
 
 @app.post("/conteudos", response_model=schemas.ConteudoResponse)
@@ -138,19 +146,21 @@ def salvar_conteudo(
     if not email:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    professor = db.query(models.Professor).filter(models.Professor.email == email).first()
+    # 🔥 ADMIN pode tudo
+    if email != ADMIN_EMAIL:
+        professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
-    atribuicao = db.query(models.Atribuicao).filter(
-        models.Atribuicao.id == dados.atribuicao_id
-    ).first()
+        atribuicao = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
 
-    if not atribuicao or atribuicao.professor_id != professor.id:
-        raise HTTPException(status_code=403, detail="Sem permissão")
+        if not atribuicao or atribuicao.professor_id != professor.id:
+            raise HTTPException(status_code=403, detail="Sem permissão")
 
     return crud.salvar_conteudo(db, dados)
 
 # ==========================================
-# LISTAR TURMAS
+# TURMAS
 # ==========================================
 
 @app.get("/turmas", response_model=list[schemas.TurmaResponse])
@@ -158,7 +168,7 @@ def get_turmas(db: Session = Depends(get_db)):
     return crud.listar_turmas(db)
 
 # ==========================================
-# CALENDÁRIO POR TURMA
+# CALENDÁRIO
 # ==========================================
 
 @app.get("/calendario/{turma_id}", response_model=list[schemas.ConteudoResponse])
@@ -211,7 +221,7 @@ def buscar_trabalho(
     return trabalho
 
 # ==========================================
-# SALVAR TRABALHO (PROTEGIDO 🔒)
+# SALVAR TRABALHO
 # ==========================================
 
 @app.post("/trabalhos", response_model=schemas.TrabalhoResponse)
@@ -223,14 +233,16 @@ def salvar_trabalho(
     if not email:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    professor = db.query(models.Professor).filter(models.Professor.email == email).first()
+    # 🔥 ADMIN pode tudo
+    if email != ADMIN_EMAIL:
+        professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
-    atribuicao = db.query(models.Atribuicao).filter(
-        models.Atribuicao.id == dados.atribuicao_id
-    ).first()
+        atribuicao = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
 
-    if not atribuicao or atribuicao.professor_id != professor.id:
-        raise HTTPException(status_code=403, detail="Sem permissão")
+        if not atribuicao or atribuicao.professor_id != professor.id:
+            raise HTTPException(status_code=403, detail="Sem permissão")
 
     return crud.salvar_trabalho(db, dados)
 
@@ -247,7 +259,7 @@ def get_cronograma_trabalhos(
     return crud.buscar_trabalhos_por_turma(db, turma_id, bimestre)
 
 # ==========================================
-# EXCLUIR CONTEÚDO (PROTEGIDO 🔒)
+# EXCLUIR CONTEÚDO
 # ==========================================
 
 @app.delete("/conteudos/{conteudo_id}")
@@ -263,7 +275,7 @@ def excluir_conteudo(
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
 
-    if not email or conteudo.atribuicao.professor.email != email:
+    if email != ADMIN_EMAIL and conteudo.atribuicao.professor.email != email:
         raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(conteudo)
@@ -272,7 +284,7 @@ def excluir_conteudo(
     return {"message": "Avaliação excluída com sucesso"}
 
 # ==========================================
-# EXCLUIR TRABALHO (PROTEGIDO 🔒)
+# EXCLUIR TRABALHO
 # ==========================================
 
 @app.delete("/trabalhos/{trabalho_id}")
@@ -288,7 +300,7 @@ def excluir_trabalho(
     if not trabalho:
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")
 
-    if not email or trabalho.atribuicao.professor.email != email:
+    if email != ADMIN_EMAIL and trabalho.atribuicao.professor.email != email:
         raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(trabalho)
