@@ -22,7 +22,10 @@ app = FastAPI()
 # 🔥 ADMIN
 # ==========================================
 
-ADMIN_EMAIL = "sharlayne.fonseca@professor.barueri.br"
+ADMIN_EMAILS = {
+    "sharlayne.fonseca@professor.barueri.br",
+    "wilber.garcia@professor.barueri.br"
+}
 
 # ==========================================
 # 🔒 SEGURANÇA TOKEN SUPABASE
@@ -107,7 +110,7 @@ def get_atribuicoes(
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     # 🔥 ADMIN pode tudo
-    if email == ADMIN_EMAIL:
+    if email in ADMIN_EMAILS:
         return crud.listar_atribuicoes_por_professor(db, professor_id)
 
     professor = db.query(models.Professor).filter(models.Professor.email == email).first()
@@ -148,7 +151,7 @@ def salvar_conteudo(
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     # 🔥 ADMIN pode tudo
-    if email != ADMIN_EMAIL:
+    if email not in ADMIN_EMAILS:
         professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
         atribuicao = db.query(models.Atribuicao).filter(
@@ -235,7 +238,7 @@ def salvar_trabalho(
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     # 🔥 ADMIN pode tudo
-    if email != ADMIN_EMAIL:
+    if email not in ADMIN_EMAILS:
         professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
         atribuicao = db.query(models.Atribuicao).filter(
@@ -276,7 +279,7 @@ def excluir_conteudo(
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
 
-    if email != ADMIN_EMAIL and conteudo.atribuicao.professor.email != email:
+    if email not in ADMIN_EMAILS and conteudo.atribuicao.professor.email != email:
         raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(conteudo)
@@ -301,7 +304,7 @@ def excluir_trabalho(
     if not trabalho:
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")
 
-    if email != ADMIN_EMAIL and trabalho.atribuicao.professor.email != email:
+    if email not in ADMIN_EMAILS and trabalho.atribuicao.professor.email != email:
         raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(trabalho)
