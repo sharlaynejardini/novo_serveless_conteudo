@@ -1,3 +1,5 @@
+import json
+
 import models
 from sqlalchemy.orm import joinedload
 
@@ -38,18 +40,58 @@ def buscar_conteudo(db, atribuicao_id, bimestre):
     )
 
 
+def buscar_conteudo_por_id(db, conteudo_id):
+    return (
+        db.query(models.Conteudo)
+        .options(
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.disciplina),
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.turma),
+        )
+        .filter(models.Conteudo.id == conteudo_id)
+        .first()
+    )
+
+
+def buscar_conteudo_mesma_data(db, atribuicao_id, bimestre, data_avaliacao):
+    return (
+        db.query(models.Conteudo)
+        .filter(
+            models.Conteudo.atribuicao_id == atribuicao_id,
+            models.Conteudo.bimestre == bimestre,
+            models.Conteudo.data_avaliacao == data_avaliacao
+        )
+        .first()
+    )
+
+
+def serializar_conteudo(conteudo):
+    if isinstance(conteudo, list):
+        return json.dumps(conteudo, ensure_ascii=False)
+
+    return conteudo
+
+
 def salvar_conteudo(db, dados):
 
-    conteudo = buscar_conteudo(db, dados.atribuicao_id, dados.bimestre)
+    conteudo = buscar_conteudo_mesma_data(
+        db,
+        dados.atribuicao_id,
+        dados.bimestre,
+        dados.data_avaliacao
+    )
 
     if conteudo:
-        conteudo.conteudo = dados.conteudo
+        conteudo.conteudo = serializar_conteudo(dados.conteudo)
         conteudo.data_avaliacao = dados.data_avaliacao
     else:
         conteudo = models.Conteudo(
             atribuicao_id=dados.atribuicao_id,
             bimestre=dados.bimestre,
-            conteudo=dados.conteudo,
+            conteudo=serializar_conteudo(dados.conteudo),
             data_avaliacao=dados.data_avaliacao
         )
         db.add(conteudo)
@@ -57,7 +99,7 @@ def salvar_conteudo(db, dados):
     db.commit()
     db.refresh(conteudo)
 
-    return buscar_conteudo(db, dados.atribuicao_id, dados.bimestre)
+    return buscar_conteudo_por_id(db, conteudo.id)
 
 
 def buscar_calendario_por_turma(db, turma_id):
