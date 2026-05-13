@@ -437,6 +437,9 @@ def get_todas_atribuicoes(
 ):
     return (
         db.query(models.Atribuicao)
+        .join(models.Atribuicao.professor)
+        .join(models.Atribuicao.turma)
+        .join(models.Atribuicao.disciplina)
         .options(
             joinedload(models.Atribuicao.professor),
             joinedload(models.Atribuicao.turma),
