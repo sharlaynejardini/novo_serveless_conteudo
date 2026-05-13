@@ -56,18 +56,6 @@ def buscar_conteudo_por_id(db, conteudo_id):
     )
 
 
-def buscar_conteudo_mesma_data(db, atribuicao_id, bimestre, data_avaliacao):
-    return (
-        db.query(models.Conteudo)
-        .filter(
-            models.Conteudo.atribuicao_id == atribuicao_id,
-            models.Conteudo.bimestre == bimestre,
-            models.Conteudo.data_avaliacao == data_avaliacao
-        )
-        .first()
-    )
-
-
 def serializar_conteudo(conteudo):
     if isinstance(conteudo, list):
         return json.dumps(conteudo, ensure_ascii=False)
@@ -77,24 +65,13 @@ def serializar_conteudo(conteudo):
 
 def salvar_conteudo(db, dados):
 
-    conteudo = buscar_conteudo_mesma_data(
-        db,
-        dados.atribuicao_id,
-        dados.bimestre,
-        dados.data_avaliacao
+    conteudo = models.Conteudo(
+        atribuicao_id=dados.atribuicao_id,
+        bimestre=dados.bimestre,
+        conteudo=serializar_conteudo(dados.conteudo),
+        data_avaliacao=dados.data_avaliacao
     )
-
-    if conteudo:
-        conteudo.conteudo = serializar_conteudo(dados.conteudo)
-        conteudo.data_avaliacao = dados.data_avaliacao
-    else:
-        conteudo = models.Conteudo(
-            atribuicao_id=dados.atribuicao_id,
-            bimestre=dados.bimestre,
-            conteudo=serializar_conteudo(dados.conteudo),
-            data_avaliacao=dados.data_avaliacao
-        )
-        db.add(conteudo)
+    db.add(conteudo)
 
     db.commit()
     db.refresh(conteudo)
