@@ -65,6 +65,7 @@ class AtribuicaoResponse(BaseModel):
 # =========================
 
 class ConteudoCreate(BaseModel):
+    id: UUID | None = None
     atribuicao_id: UUID
     bimestre: int
     conteudo: Union[str, List[str]]  # aceita string ou lista
