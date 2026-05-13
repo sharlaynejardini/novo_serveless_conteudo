@@ -72,6 +72,13 @@ class ConteudoCreate(BaseModel):
     data_avaliacao: date
 
 
+class ConteudoUpdate(BaseModel):
+    atribuicao_id: UUID | None = None
+    bimestre: int | None = None
+    conteudo: Union[str, List[str], None] = None
+    data_avaliacao: date | None = None
+
+
 # =========================
 # CONTEÚDO RESPONSE
 # =========================

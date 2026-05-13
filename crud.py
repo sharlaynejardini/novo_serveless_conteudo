@@ -66,15 +66,7 @@ def serializar_conteudo(conteudo):
 def salvar_conteudo(db, dados):
 
     if dados.id:
-        conteudo = db.query(models.Conteudo).filter(models.Conteudo.id == dados.id).first()
-
-        if not conteudo:
-            return None
-
-        conteudo.atribuicao_id = dados.atribuicao_id
-        conteudo.bimestre = dados.bimestre
-        conteudo.conteudo = serializar_conteudo(dados.conteudo)
-        conteudo.data_avaliacao = dados.data_avaliacao
+        return atualizar_conteudo(db, dados.id, dados)
     else:
         conteudo = models.Conteudo(
             atribuicao_id=dados.atribuicao_id,
@@ -96,10 +88,17 @@ def atualizar_conteudo(db, conteudo_id, dados):
     if not conteudo:
         return None
 
-    conteudo.atribuicao_id = dados.atribuicao_id
-    conteudo.bimestre = dados.bimestre
-    conteudo.conteudo = serializar_conteudo(dados.conteudo)
-    conteudo.data_avaliacao = dados.data_avaliacao
+    if dados.atribuicao_id is not None:
+        conteudo.atribuicao_id = dados.atribuicao_id
+
+    if dados.bimestre is not None:
+        conteudo.bimestre = dados.bimestre
+
+    if dados.conteudo is not None:
+        conteudo.conteudo = serializar_conteudo(dados.conteudo)
+
+    if dados.data_avaliacao is not None:
+        conteudo.data_avaliacao = dados.data_avaliacao
 
     db.commit()
     db.refresh(conteudo)

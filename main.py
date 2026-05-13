@@ -172,22 +172,31 @@ def salvar_conteudo(
 @app.put("/conteudos/{conteudo_id}", response_model=schemas.ConteudoResponse)
 def atualizar_conteudo(
     conteudo_id: UUID,
-    dados: schemas.ConteudoCreate,
+    dados: schemas.ConteudoUpdate,
     email: str = Depends(get_current_user_email),
     db: Session = Depends(get_db)
 ):
     if not email:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
+    conteudo_atual = crud.buscar_conteudo_por_id(db, conteudo_id)
+
+    if not conteudo_atual:
+        raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
+
     if email not in ADMIN_EMAILS:
         professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
-        atribuicao = db.query(models.Atribuicao).filter(
-            models.Atribuicao.id == dados.atribuicao_id
-        ).first()
-
-        if not professor or not atribuicao or atribuicao.professor_id != professor.id:
+        if not professor or conteudo_atual.atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
+
+        if dados.atribuicao_id is not None:
+            atribuicao = db.query(models.Atribuicao).filter(
+                models.Atribuicao.id == dados.atribuicao_id
+            ).first()
+
+            if not atribuicao or atribuicao.professor_id != professor.id:
+                raise HTTPException(status_code=403, detail="Sem permissão")
 
     conteudo = crud.atualizar_conteudo(db, conteudo_id, dados)
 
