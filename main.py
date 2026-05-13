@@ -287,7 +287,7 @@ def salvar_trabalho(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
 
-        if not atribuicao or atribuicao.professor_id != professor.id:
+        if not professor or not atribuicao or atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
 
     return crud.salvar_trabalho(db, dados)
