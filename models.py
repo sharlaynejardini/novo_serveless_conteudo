@@ -60,6 +60,7 @@ class Conteudo(Base):
 
     atribuicao_id = Column(UUID(as_uuid=True), ForeignKey("atribuicoes.id"))
     bimestre = Column(Integer, nullable=False)
+    tipo_avaliacao = Column(String, nullable=False, default="regular")
     conteudo = Column(Text, nullable=False)
 
     # 🔥 OBRIGATÓRIA

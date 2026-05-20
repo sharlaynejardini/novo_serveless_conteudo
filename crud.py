@@ -21,7 +21,7 @@ def listar_atribuicoes_por_professor(db, professor_id):
     )
 
 
-def buscar_conteudo(db, atribuicao_id, bimestre):
+def buscar_conteudo(db, atribuicao_id, bimestre, tipo_avaliacao="regular"):
     return (
         db.query(models.Conteudo)
         .options(
@@ -34,7 +34,8 @@ def buscar_conteudo(db, atribuicao_id, bimestre):
         )
         .filter(
             models.Conteudo.atribuicao_id == atribuicao_id,
-            models.Conteudo.bimestre == bimestre
+            models.Conteudo.bimestre == bimestre,
+            models.Conteudo.tipo_avaliacao == tipo_avaliacao
         )
         .first()
     )
@@ -71,6 +72,7 @@ def salvar_conteudo(db, dados):
         conteudo = models.Conteudo(
             atribuicao_id=dados.atribuicao_id,
             bimestre=dados.bimestre,
+            tipo_avaliacao=dados.tipo_avaliacao,
             conteudo=serializar_conteudo(dados.conteudo),
             data_avaliacao=dados.data_avaliacao
         )
@@ -93,6 +95,9 @@ def atualizar_conteudo(db, conteudo_id, dados):
 
     if dados.bimestre is not None:
         conteudo.bimestre = dados.bimestre
+
+    if dados.tipo_avaliacao is not None:
+        conteudo.tipo_avaliacao = dados.tipo_avaliacao
 
     if dados.conteudo is not None:
         conteudo.conteudo = serializar_conteudo(dados.conteudo)

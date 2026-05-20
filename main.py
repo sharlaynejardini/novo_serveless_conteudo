@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 
@@ -81,6 +82,19 @@ async def options_handler(request: Request, rest_of_path: str):
 
 Base.metadata.create_all(bind=engine)
 
+def garantir_colunas_conteudo():
+    inspector = inspect(engine)
+    colunas = {coluna["name"] for coluna in inspector.get_columns("conteudos")}
+
+    if "tipo_avaliacao" not in colunas:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE conteudos "
+                "ADD COLUMN tipo_avaliacao VARCHAR NOT NULL DEFAULT 'regular'"
+            ))
+
+garantir_colunas_conteudo()
+
 def get_db():
     db = SessionLocal()
     try:
@@ -128,9 +142,10 @@ def get_atribuicoes(
 def buscar_conteudo(
     atribuicao_id: UUID = Query(...),
     bimestre: int = Query(...),
+    tipo_avaliacao: str = Query("regular"),
     db: Session = Depends(get_db)
 ):
-    conteudo = crud.buscar_conteudo(db, atribuicao_id, bimestre)
+    conteudo = crud.buscar_conteudo(db, atribuicao_id, bimestre, tipo_avaliacao)
 
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
@@ -242,7 +257,8 @@ def get_cronograma(
         .join(models.Atribuicao)
         .filter(
             models.Atribuicao.turma_id == turma_id,
-            models.Conteudo.bimestre == bimestre
+            models.Conteudo.bimestre == bimestre,
+            models.Conteudo.tipo_avaliacao == "regular"
         )
         .all()
     )

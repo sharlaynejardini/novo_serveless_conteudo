@@ -68,6 +68,7 @@ class ConteudoCreate(BaseModel):
     id: UUID | None = None
     atribuicao_id: UUID
     bimestre: int
+    tipo_avaliacao: str = "regular"
     conteudo: Union[str, List[str]]  # aceita string ou lista
     data_avaliacao: date
 
@@ -75,6 +76,7 @@ class ConteudoCreate(BaseModel):
 class ConteudoUpdate(BaseModel):
     atribuicao_id: UUID | None = None
     bimestre: int | None = None
+    tipo_avaliacao: str | None = None
     conteudo: Union[str, List[str], None] = None
     data_avaliacao: date | None = None
 
@@ -86,6 +88,7 @@ class ConteudoUpdate(BaseModel):
 class ConteudoResponse(BaseModel):
     id: UUID
     bimestre: int
+    tipo_avaliacao: str = "regular"
     conteudo: List[str]  # 🔥 agora sempre será lista
     data_avaliacao: date
     atribuicao: AtribuicaoResponse
