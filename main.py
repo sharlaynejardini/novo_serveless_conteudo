@@ -244,6 +244,7 @@ def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
 def get_cronograma(
     turma_id: UUID,
     bimestre: int,
+    tipo_avaliacao: str = Query("regular"),
     db: Session = Depends(get_db)
 ):
     resultados = (
@@ -258,7 +259,7 @@ def get_cronograma(
         .filter(
             models.Atribuicao.turma_id == turma_id,
             models.Conteudo.bimestre == bimestre,
-            models.Conteudo.tipo_avaliacao == "regular"
+            models.Conteudo.tipo_avaliacao == tipo_avaliacao
         )
         .all()
     )
