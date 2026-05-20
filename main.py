@@ -93,6 +93,15 @@ def garantir_colunas_conteudo():
                 "ADD COLUMN tipo_avaliacao VARCHAR NOT NULL DEFAULT 'regular'"
             ))
 
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE conteudos "
+            "SET tipo_avaliacao = 'simulado' "
+            "WHERE bimestre = 2 "
+            "AND data_avaliacao BETWEEN '2026-05-20' AND '2026-05-22' "
+            "AND tipo_avaliacao = 'regular'"
+        ))
+
 garantir_colunas_conteudo()
 
 def get_db():
