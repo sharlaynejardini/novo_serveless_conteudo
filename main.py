@@ -5,6 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
+from datetime import date
 from uuid import UUID
 
 import jwt
@@ -28,6 +29,27 @@ ADMIN_EMAILS = {
     "sharlayne.fonseca@professor.barueri.br",
     "wilber.garcia@professor.barueri.br"
 }
+
+TURMAS_OBMEP_2026 = {"6A", "6B", "7A", "7B", "8A", "8B", "8C", "9A", "9B", "9C"}
+DATA_OBMEP_2026 = date(2026, 6, 9)
+DATA_REMANEJADA_OBMEP_2026 = date(2026, 6, 16)
+
+
+def normalizar_nome_turma(nome: str | None):
+    if not nome:
+        return ""
+
+    return (
+        nome.upper()
+        .replace(" ", "")
+        .replace("º", "")
+        .replace("°", "")
+        .replace("ANO", "")
+    )
+
+
+def turma_tem_obmep_2026(nome: str | None):
+    return normalizar_nome_turma(nome) in TURMAS_OBMEP_2026
 
 # ==========================================
 # 🔒 SEGURANÇA TOKEN SUPABASE
@@ -103,6 +125,20 @@ def garantir_colunas_conteudo():
             "AND tipo_avaliacao = 'regular'"
         ))
 
+def remanejar_conteudos_obmep_2026():
+    turmas = ", ".join(f"'{turma}'" for turma in sorted(TURMAS_OBMEP_2026))
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE conteudos "
+            "SET data_avaliacao = '2026-06-16' "
+            "FROM atribuicoes "
+            "JOIN turmas ON turmas.id = atribuicoes.turma_id "
+            "WHERE conteudos.atribuicao_id = atribuicoes.id "
+            "AND conteudos.data_avaliacao = '2026-06-09' "
+            f"AND UPPER(REPLACE(REPLACE(REPLACE(turmas.nome, ' ', ''), 'º', ''), '°', '')) IN ({turmas})"
+        ))
+
 def garantir_unicidade_conteudo():
     inspector = inspect(engine)
     chave_antiga = {"atribuicao_id", "bimestre"}
@@ -128,6 +164,7 @@ def garantir_unicidade_conteudo():
         ))
 
 garantir_colunas_conteudo()
+remanejar_conteudos_obmep_2026()
 garantir_unicidade_conteudo()
 
 def get_db():
@@ -211,6 +248,21 @@ def salvar_conteudo(
         if not professor or not atribuicao or atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
 
+    else:
+        atribuicao = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
+
+    if (
+        atribuicao
+        and dados.data_avaliacao == DATA_OBMEP_2026
+        and turma_tem_obmep_2026(atribuicao.turma.nome)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="09/06/2026 esta reservado para OBMEP. Use 16/06/2026 para essa turma."
+        )
+
     try:
         conteudo = crud.salvar_conteudo(db, dados)
     except SQLAlchemyError as e:
@@ -256,6 +308,22 @@ def atualizar_conteudo(
 
             if not atribuicao or atribuicao.professor_id != professor.id:
                 raise HTTPException(status_code=403, detail="Sem permissão")
+
+    atribuicao_para_validar = conteudo_atual.atribuicao
+    if dados.atribuicao_id is not None:
+        atribuicao_para_validar = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
+
+    if (
+        dados.data_avaliacao == DATA_OBMEP_2026
+        and atribuicao_para_validar
+        and turma_tem_obmep_2026(atribuicao_para_validar.turma.nome)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="09/06/2026 está reservado para OBMEP. Use 16/06/2026 para essa turma."
+        )
 
     conteudo = crud.atualizar_conteudo(db, conteudo_id, dados)
 
@@ -350,7 +418,10 @@ def salvar_trabalho(
 
         if not professor or not atribuicao or atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
-
+    else:
+        atribuicao = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
     return crud.salvar_trabalho(db, dados)
 
 # ==========================================
