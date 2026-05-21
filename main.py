@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 from uuid import UUID
 
@@ -102,7 +103,32 @@ def garantir_colunas_conteudo():
             "AND tipo_avaliacao = 'regular'"
         ))
 
+def garantir_unicidade_conteudo():
+    inspector = inspect(engine)
+    chave_antiga = {"atribuicao_id", "bimestre"}
+
+    with engine.begin() as conn:
+        for constraint in inspector.get_unique_constraints("conteudos"):
+            nome = constraint.get("name")
+            colunas = set(constraint.get("column_names") or [])
+
+            if nome and colunas == chave_antiga:
+                conn.execute(text(f'ALTER TABLE conteudos DROP CONSTRAINT IF EXISTS "{nome}"'))
+
+        for index in inspector.get_indexes("conteudos"):
+            nome = index.get("name")
+            colunas = set(index.get("column_names") or [])
+
+            if nome and index.get("unique") and colunas == chave_antiga:
+                conn.execute(text(f'DROP INDEX IF EXISTS "{nome}"'))
+
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS conteudos_atribuicao_bimestre_tipo_idx "
+            "ON conteudos (atribuicao_id, bimestre, tipo_avaliacao)"
+        ))
+
 garantir_colunas_conteudo()
+garantir_unicidade_conteudo()
 
 def get_db():
     db = SessionLocal()
@@ -185,7 +211,16 @@ def salvar_conteudo(
         if not professor or not atribuicao or atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
 
-    conteudo = crud.salvar_conteudo(db, dados)
+    try:
+        conteudo = crud.salvar_conteudo(db, dados)
+    except SQLAlchemyError as e:
+        db.rollback()
+        print("ERRO AO SALVAR CONTEUDO:", str(e))
+        raise HTTPException(status_code=500, detail="Erro no banco ao salvar conteudo")
+    except Exception as e:
+        db.rollback()
+        print("ERRO INESPERADO AO SALVAR CONTEUDO:", str(e))
+        raise HTTPException(status_code=500, detail="Erro inesperado ao salvar conteudo")
 
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
