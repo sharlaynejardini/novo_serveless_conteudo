@@ -68,6 +68,20 @@ def salvar_conteudo(db, dados):
 
     if dados.id:
         return atualizar_conteudo(db, dados.id, dados)
+
+    conteudo = (
+        db.query(models.Conteudo)
+        .filter(
+            models.Conteudo.atribuicao_id == dados.atribuicao_id,
+            models.Conteudo.bimestre == dados.bimestre,
+            models.Conteudo.tipo_avaliacao == dados.tipo_avaliacao
+        )
+        .first()
+    )
+
+    if conteudo:
+        conteudo.conteudo = serializar_conteudo(dados.conteudo)
+        conteudo.data_avaliacao = dados.data_avaliacao
     else:
         conteudo = models.Conteudo(
             atribuicao_id=dados.atribuicao_id,
