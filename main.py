@@ -172,12 +172,20 @@ def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(s
         return None
 
 def baixar_csv_planilha(gid: str):
+    cache_buster = int(datetime.utcnow().timestamp())
     url = (
         f"https://docs.google.com/spreadsheets/d/{PLANILHA_CALENDARIO_ID}/export"
-        f"?format=csv&gid={gid}"
+        f"?format=csv&gid={gid}&cache_buster={cache_buster}"
+    )
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
+        }
     )
 
-    with urllib.request.urlopen(url, timeout=20) as resposta:
+    with urllib.request.urlopen(request, timeout=20) as resposta:
         conteudo = resposta.read().decode("utf-8-sig")
 
     return list(csv.DictReader(conteudo.splitlines()))
@@ -741,7 +749,17 @@ def get_cronograma_trabalhos(
 @app.get("/calendario-escolar")
 def get_calendario_escolar():
     try:
-        return eventos_calendario_para_resposta()
+        return JSONResponse(
+            content={
+                "eventos": eventos_calendario_para_resposta(),
+                "atualizado_em": datetime.utcnow().isoformat()
+            },
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     except Exception as e:
         raise HTTPException(
             status_code=502,
