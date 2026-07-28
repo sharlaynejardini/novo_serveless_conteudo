@@ -267,6 +267,19 @@ def carregar_professores_calendario():
     return professores
 
 
+def eventos_calendario_para_resposta():
+    return [
+        {
+            "data": evento["data"],
+            "dia": evento["dia"],
+            "evento": evento["evento"],
+            "obs": evento["obs"],
+            "data_evento": evento["data_evento"].isoformat()
+        }
+        for evento in carregar_eventos_calendario()
+    ]
+
+
 def smtp_configurado():
     obrigatorias = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]
     return all(os.getenv(nome) for nome in obrigatorias)
@@ -724,6 +737,17 @@ def get_cronograma_trabalhos(
 # ==========================================
 # ALERTAS DO CALENDARIO ESCOLAR
 # ==========================================
+
+@app.get("/calendario-escolar")
+def get_calendario_escolar():
+    try:
+        return eventos_calendario_para_resposta()
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Erro ao ler a planilha do calendario escolar: {str(e)}"
+        )
+
 
 @app.get("/alertas/calendario-escolar")
 def enviar_alertas_calendario_escolar(
