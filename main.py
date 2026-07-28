@@ -31,6 +31,7 @@ ADMIN_EMAILS = {
 }
 
 TURMAS_OBMEP_2026 = {"6A", "6B", "7A", "7B", "8A", "8B", "8C", "9A", "9B", "9C"}
+TURMAS_SIMULADO_FUND2_2026 = {"6A", "6B", "7A", "7B", "8A", "8B", "8C", "9A", "9B", "9C"}
 DATA_OBMEP_2026 = date(2026, 6, 9)
 DATA_REMANEJADA_OBMEP_2026 = date(2026, 6, 16)
 PERIODOS_SIMULADO_FUND2_2026 = {
@@ -56,9 +57,8 @@ def turma_tem_obmep_2026(nome: str | None):
     return normalizar_nome_turma(nome) in TURMAS_OBMEP_2026
 
 
-def turma_eh_fundamental2(nome: str | None):
-    turma = normalizar_nome_turma(nome)
-    return bool(turma) and turma[0] in {"6", "7", "8", "9"}
+def turma_pode_simulado_fund2(nome: str | None):
+    return normalizar_nome_turma(nome) in TURMAS_SIMULADO_FUND2_2026
 
 
 def validar_avaliacao_conteudo(dados, atribuicao):
@@ -71,10 +71,10 @@ def validar_avaliacao_conteudo(dados, atribuicao):
     if dados.tipo_avaliacao == "simulado":
         periodo = PERIODOS_SIMULADO_FUND2_2026.get(dados.bimestre)
 
-        if not periodo or not turma_eh_fundamental2(atribuicao.turma.nome):
+        if not periodo or not turma_pode_simulado_fund2(atribuicao.turma.nome):
             raise HTTPException(
                 status_code=400,
-                detail="O simulado esta liberado apenas para turmas do 6o ao 9o ano no 2o e 3o bimestres."
+                detail="O simulado esta liberado apenas para as turmas 6A, 6B, 7A, 7B, 8A, 8B, 8C, 9A, 9B e 9C no 2o e 3o bimestres."
             )
 
         inicio, fim = periodo
