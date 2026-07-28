@@ -2,7 +2,7 @@
 # MODELOS SQLALCHEMY
 # ==========================================
 
-from sqlalchemy import Column, String, Integer, ForeignKey, Date, Text
+from sqlalchemy import Column, String, Integer, ForeignKey, Date, Text, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -81,3 +81,17 @@ class Trabalho(Base):
     data_entrega = Column(Date, nullable=False)
 
     atribuicao = relationship("Atribuicao")
+
+
+class AlertaCalendarioEnviado(Base):
+    __tablename__ = "alertas_calendario_enviados"
+    __table_args__ = (
+        UniqueConstraint("chave", name="uq_alertas_calendario_enviados_chave"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chave = Column(String, nullable=False, unique=True)
+    email = Column(String, nullable=False)
+    data_evento = Column(Date, nullable=False)
+    evento = Column(Text, nullable=False)
+    enviado_em = Column(DateTime, nullable=False)

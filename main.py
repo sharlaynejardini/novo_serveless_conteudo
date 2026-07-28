@@ -5,8 +5,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
-from datetime import date
+from datetime import date, datetime, timedelta
+from email.message import EmailMessage
 from uuid import UUID
+import csv
+import hashlib
+import os
+import re
+import smtplib
+import ssl
+import urllib.request
 
 import jwt
 
@@ -42,6 +50,12 @@ PERIODOS_PROVA_BIMESTRAL_2026 = {
     3: (date(2026, 9, 14), date(2026, 9, 18)),
 }
 LIMITE_PROVAS_BIMESTRAIS_POR_DIA = 2
+PLANILHA_CALENDARIO_ID = os.getenv(
+    "PLANILHA_CALENDARIO_ID",
+    "1nSpwVBX2LH6iUVAibtthXIfMO1lViEP1PmV1vH9Ihg0"
+)
+GID_CALENDARIO_2_SEMESTRE = os.getenv("GID_CALENDARIO_2_SEMESTRE", "1366818204")
+GID_PROFESSORES_CALENDARIO = os.getenv("GID_PROFESSORES_CALENDARIO", "504314047")
 
 
 def normalizar_nome_turma(nome: str | None):
@@ -156,6 +170,179 @@ def get_current_user_email(credentials: HTTPAuthorizationCredentials = Depends(s
     except Exception as e:
         print("🔥 ERRO TOKEN:", str(e))
         return None
+
+def baixar_csv_planilha(gid: str):
+    url = (
+        f"https://docs.google.com/spreadsheets/d/{PLANILHA_CALENDARIO_ID}/export"
+        f"?format=csv&gid={gid}"
+    )
+
+    with urllib.request.urlopen(url, timeout=20) as resposta:
+        conteudo = resposta.read().decode("utf-8-sig")
+
+    return list(csv.DictReader(conteudo.splitlines()))
+
+
+def limpar_texto(valor):
+    return (valor or "").strip()
+
+
+def normalizar_cabecalho(valor):
+    return limpar_texto(valor).upper()
+
+
+def valor_linha(linha, *nomes):
+    nomes_normalizados = {normalizar_cabecalho(nome) for nome in nomes}
+
+    for chave, valor in linha.items():
+        if normalizar_cabecalho(chave) in nomes_normalizados:
+            return limpar_texto(valor)
+
+    return ""
+
+
+def parse_data_evento(valor):
+    texto_data = limpar_texto(valor)
+    match = re.search(r"(\d{1,2})/(\d{1,2})(?:/(\d{4}))?", texto_data)
+
+    if match:
+        dia, mes, ano = match.groups()
+        return date(int(ano or 2026), int(mes), int(dia))
+
+    match_periodo_sem_mes_no_inicio = re.search(
+        r"^(\d{1,2})\s*(?:a|e)\s*\d{1,2}/(\d{1,2})(?:/(\d{4}))?",
+        texto_data,
+        re.IGNORECASE
+    )
+
+    if match_periodo_sem_mes_no_inicio:
+        dia, mes, ano = match_periodo_sem_mes_no_inicio.groups()
+        return date(int(ano or 2026), int(mes), int(dia))
+
+    return None
+
+
+def carregar_eventos_calendario():
+    linhas = baixar_csv_planilha(GID_CALENDARIO_2_SEMESTRE)
+    eventos = []
+
+    for linha in linhas:
+        data_texto = valor_linha(linha, "DATA")
+        evento = valor_linha(linha, "EVENTO / ATIVIDADE", "EVENTO", "ATIVIDADE")
+
+        if not data_texto or not evento:
+            continue
+
+        data_evento = parse_data_evento(data_texto)
+
+        if not data_evento:
+            continue
+
+        eventos.append({
+            "data": data_texto,
+            "dia": valor_linha(linha, "DIA DA SEMANA"),
+            "evento": evento,
+            "obs": valor_linha(linha, "OBS", "OBSERVAÇÃO", "OBSERVACOES"),
+            "data_evento": data_evento
+        })
+
+    return eventos
+
+
+def carregar_professores_calendario():
+    linhas = baixar_csv_planilha(GID_PROFESSORES_CALENDARIO)
+    professores = []
+
+    for linha in linhas:
+        email = valor_linha(linha, "EMAIL").lower()
+
+        if "@" not in email:
+            continue
+
+        professores.append({
+            "email": email,
+            "nome": valor_linha(linha, "NOME") or email
+        })
+
+    return professores
+
+
+def smtp_configurado():
+    obrigatorias = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]
+    return all(os.getenv(nome) for nome in obrigatorias)
+
+
+def montar_listas_eventos_email(eventos):
+    itens_html = []
+    itens_texto = []
+
+    for evento in eventos:
+        obs_html = f" <em>({evento['obs']})</em>" if evento.get("obs") else ""
+        obs_texto = f" ({evento['obs']})" if evento.get("obs") else ""
+        itens_html.append(f"<li><strong>{evento['data']}</strong> - {evento['evento']}{obs_html}</li>")
+        itens_texto.append(f"- {evento['data']} - {evento['evento']}{obs_texto}")
+
+    return "".join(itens_html), "\n".join(itens_texto)
+
+
+def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
+    if not smtp_configurado():
+        raise RuntimeError("SMTP nao configurado")
+
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user)
+    lista_eventos_html, lista_eventos_texto = montar_listas_eventos_email(eventos)
+
+    mensagem = EmailMessage()
+    mensagem["Subject"] = f"Alerta de calendario escolar - {data_alvo.strftime('%d/%m/%Y')}"
+    mensagem["From"] = smtp_from
+    mensagem["To"] = destinatario
+    mensagem.set_content(
+        f"Ola, {nome}!\n\n"
+        "Este e um lembrete automatico dos eventos do calendario escolar daqui a 2 dias:\n\n"
+        f"{lista_eventos_texto}\n\n"
+        "Sistema de Conteudos Essenciais - Takaoka"
+    )
+    mensagem.add_alternative(
+        f"""
+        <div style="font-family: Arial, sans-serif; color: #1f2937;">
+          <h2>Alerta de calendário escolar</h2>
+          <p>Olá, {nome}!</p>
+          <p>Este é um lembrete automático dos eventos do calendário escolar daqui a <strong>2 dias</strong>.</p>
+          <ul>{lista_eventos_html}</ul>
+          <p style="color:#64748b;">Sistema de Conteúdos Essenciais - Takaoka</p>
+        </div>
+        """,
+        subtype="html"
+    )
+
+    contexto = ssl.create_default_context()
+
+    with smtplib.SMTP(smtp_host, smtp_port) as servidor:
+        servidor.starttls(context=contexto)
+        servidor.login(smtp_user, smtp_password)
+        servidor.send_message(mensagem)
+
+
+def chave_alerta(email, data_evento, evento):
+    bruto = f"{email}|{data_evento.isoformat()}|{evento}".encode("utf-8")
+    return hashlib.sha256(bruto).hexdigest()
+
+
+def validar_cron_secret(request: Request):
+    cron_secret = os.getenv("CRON_SECRET")
+
+    if not cron_secret:
+        return
+
+    authorization = request.headers.get("authorization")
+
+    if authorization != f"Bearer {cron_secret}":
+        raise HTTPException(status_code=401, detail="Cron nao autorizado")
+
 
 # ==========================================
 # CORS
@@ -532,6 +719,98 @@ def get_cronograma_trabalhos(
     db: Session = Depends(get_db)
 ):
     return crud.buscar_trabalhos_por_turma(db, turma_id, bimestre)
+
+
+# ==========================================
+# ALERTAS DO CALENDARIO ESCOLAR
+# ==========================================
+
+@app.get("/alertas/calendario-escolar")
+def enviar_alertas_calendario_escolar(
+    request: Request,
+    data_referencia: date | None = Query(None),
+    db: Session = Depends(get_db)
+):
+    validar_cron_secret(request)
+
+    hoje = data_referencia or date.today()
+    data_alvo = hoje + timedelta(days=2)
+    eventos = [
+        evento
+        for evento in carregar_eventos_calendario()
+        if evento["data_evento"] == data_alvo
+    ]
+
+    if not eventos:
+        return {
+            "message": "Nenhum evento para alertar",
+            "data_alerta": data_alvo.isoformat(),
+            "eventos": 0,
+            "enviados": 0,
+            "ignorados": 0
+        }
+
+    professores = carregar_professores_calendario()
+
+    if not professores:
+        return {
+            "message": "Nenhum professor com email cadastrado na aba PROFESSORES",
+            "data_alerta": data_alvo.isoformat(),
+            "eventos": len(eventos),
+            "enviados": 0,
+            "ignorados": 0
+        }
+
+    enviados = 0
+    ignorados = 0
+
+    for professor in professores:
+        eventos_para_enviar = []
+
+        for evento in eventos:
+            chave = chave_alerta(professor["email"], evento["data_evento"], evento["evento"])
+            ja_enviado = (
+                db.query(models.AlertaCalendarioEnviado)
+                .filter(models.AlertaCalendarioEnviado.chave == chave)
+                .first()
+            )
+
+            if ja_enviado:
+                ignorados += 1
+                continue
+
+            eventos_para_enviar.append((chave, evento))
+
+        if not eventos_para_enviar:
+            continue
+
+        enviar_email_alerta(
+            professor["email"],
+            professor["nome"],
+            [evento for _, evento in eventos_para_enviar],
+            data_alvo
+        )
+
+        for chave, evento in eventos_para_enviar:
+            db.add(models.AlertaCalendarioEnviado(
+                chave=chave,
+                email=professor["email"],
+                data_evento=evento["data_evento"],
+                evento=evento["evento"],
+                enviado_em=datetime.utcnow()
+            ))
+            enviados += 1
+
+        db.commit()
+
+    return {
+        "message": "Alertas processados",
+        "data_alerta": data_alvo.isoformat(),
+        "eventos": len(eventos),
+        "professores": len(professores),
+        "enviados": enviados,
+        "ignorados": ignorados
+    }
 
 # ==========================================
 # EXCLUIR CONTEÚDO
