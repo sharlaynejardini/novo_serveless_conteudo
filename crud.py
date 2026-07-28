@@ -1,3 +1,5 @@
+import json
+
 import models
 from sqlalchemy.orm import joinedload
 
@@ -19,7 +21,7 @@ def listar_atribuicoes_por_professor(db, professor_id):
     )
 
 
-def buscar_conteudo(db, atribuicao_id, bimestre):
+def buscar_conteudo(db, atribuicao_id, bimestre, tipo_avaliacao="regular"):
     return (
         db.query(models.Conteudo)
         .options(
@@ -32,24 +34,60 @@ def buscar_conteudo(db, atribuicao_id, bimestre):
         )
         .filter(
             models.Conteudo.atribuicao_id == atribuicao_id,
-            models.Conteudo.bimestre == bimestre
+            models.Conteudo.bimestre == bimestre,
+            models.Conteudo.tipo_avaliacao == tipo_avaliacao
         )
         .first()
     )
 
 
+def buscar_conteudo_por_id(db, conteudo_id):
+    return (
+        db.query(models.Conteudo)
+        .options(
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.professor),
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.disciplina),
+            joinedload(models.Conteudo.atribuicao)
+            .joinedload(models.Atribuicao.turma),
+        )
+        .filter(models.Conteudo.id == conteudo_id)
+        .first()
+    )
+
+
+def serializar_conteudo(conteudo):
+    if isinstance(conteudo, list):
+        return json.dumps(conteudo, ensure_ascii=False)
+
+    return conteudo
+
+
 def salvar_conteudo(db, dados):
 
-    conteudo = buscar_conteudo(db, dados.atribuicao_id, dados.bimestre)
+    if dados.id:
+        return atualizar_conteudo(db, dados.id, dados)
+
+    conteudo = (
+        db.query(models.Conteudo)
+        .filter(
+            models.Conteudo.atribuicao_id == dados.atribuicao_id,
+            models.Conteudo.bimestre == dados.bimestre,
+            models.Conteudo.tipo_avaliacao == dados.tipo_avaliacao
+        )
+        .first()
+    )
 
     if conteudo:
-        conteudo.conteudo = dados.conteudo
+        conteudo.conteudo = serializar_conteudo(dados.conteudo)
         conteudo.data_avaliacao = dados.data_avaliacao
     else:
         conteudo = models.Conteudo(
             atribuicao_id=dados.atribuicao_id,
             bimestre=dados.bimestre,
-            conteudo=dados.conteudo,
+            tipo_avaliacao=dados.tipo_avaliacao,
+            conteudo=serializar_conteudo(dados.conteudo),
             data_avaliacao=dados.data_avaliacao
         )
         db.add(conteudo)
@@ -57,7 +95,34 @@ def salvar_conteudo(db, dados):
     db.commit()
     db.refresh(conteudo)
 
-    return buscar_conteudo(db, dados.atribuicao_id, dados.bimestre)
+    return buscar_conteudo_por_id(db, conteudo.id)
+
+
+def atualizar_conteudo(db, conteudo_id, dados):
+    conteudo = db.query(models.Conteudo).filter(models.Conteudo.id == conteudo_id).first()
+
+    if not conteudo:
+        return None
+
+    if dados.atribuicao_id is not None:
+        conteudo.atribuicao_id = dados.atribuicao_id
+
+    if dados.bimestre is not None:
+        conteudo.bimestre = dados.bimestre
+
+    if dados.tipo_avaliacao is not None:
+        conteudo.tipo_avaliacao = dados.tipo_avaliacao
+
+    if dados.conteudo is not None:
+        conteudo.conteudo = serializar_conteudo(dados.conteudo)
+
+    if dados.data_avaliacao is not None:
+        conteudo.data_avaliacao = dados.data_avaliacao
+
+    db.commit()
+    db.refresh(conteudo)
+
+    return buscar_conteudo_por_id(db, conteudo.id)
 
 
 def buscar_calendario_por_turma(db, turma_id):

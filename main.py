@@ -2,7 +2,10 @@ from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
+from datetime import date
 from uuid import UUID
 
 import jwt
@@ -22,7 +25,64 @@ app = FastAPI()
 # 🔥 ADMIN
 # ==========================================
 
-ADMIN_EMAIL = "sharlayne.fonseca@professor.barueri.br"
+ADMIN_EMAILS = {
+    "sharlayne.fonseca@professor.barueri.br",
+    "wilber.garcia@professor.barueri.br"
+}
+
+TURMAS_OBMEP_2026 = {"6A", "6B", "7A", "7B", "8A", "8B", "8C", "9A", "9B", "9C"}
+DATA_OBMEP_2026 = date(2026, 6, 9)
+DATA_REMANEJADA_OBMEP_2026 = date(2026, 6, 16)
+PERIODOS_SIMULADO_FUND2_2026 = {
+    2: (date(2026, 5, 20), date(2026, 5, 22)),
+    3: (date(2026, 8, 19), date(2026, 8, 21)),
+}
+
+
+def normalizar_nome_turma(nome: str | None):
+    if not nome:
+        return ""
+
+    return (
+        nome.upper()
+        .replace(" ", "")
+        .replace("º", "")
+        .replace("°", "")
+        .replace("ANO", "")
+    )
+
+
+def turma_tem_obmep_2026(nome: str | None):
+    return normalizar_nome_turma(nome) in TURMAS_OBMEP_2026
+
+
+def turma_eh_fundamental2(nome: str | None):
+    turma = normalizar_nome_turma(nome)
+    return bool(turma) and turma[0] in {"6", "7", "8", "9"}
+
+
+def validar_avaliacao_conteudo(dados, atribuicao):
+    if dados.tipo_avaliacao not in {"regular", "simulado"}:
+        raise HTTPException(status_code=400, detail="Tipo de avaliacao invalido.")
+
+    if not atribuicao:
+        raise HTTPException(status_code=404, detail="Atribuicao nao encontrada")
+
+    if dados.tipo_avaliacao == "simulado":
+        periodo = PERIODOS_SIMULADO_FUND2_2026.get(dados.bimestre)
+
+        if not periodo or not turma_eh_fundamental2(atribuicao.turma.nome):
+            raise HTTPException(
+                status_code=400,
+                detail="O simulado esta liberado apenas para turmas do 6o ao 9o ano no 2o e 3o bimestres."
+            )
+
+        inicio, fim = periodo
+        if dados.data_avaliacao < inicio or dados.data_avaliacao > fim:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Data do simulado fora do periodo permitido: {inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}."
+            )
 
 # ==========================================
 # 🔒 SEGURANÇA TOKEN SUPABASE
@@ -78,6 +138,68 @@ async def options_handler(request: Request, rest_of_path: str):
 
 Base.metadata.create_all(bind=engine)
 
+def garantir_colunas_conteudo():
+    inspector = inspect(engine)
+    colunas = {coluna["name"] for coluna in inspector.get_columns("conteudos")}
+
+    if "tipo_avaliacao" not in colunas:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "ALTER TABLE conteudos "
+                "ADD COLUMN tipo_avaliacao VARCHAR NOT NULL DEFAULT 'regular'"
+            ))
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE conteudos "
+            "SET tipo_avaliacao = 'simulado' "
+            "WHERE bimestre = 2 "
+            "AND data_avaliacao BETWEEN '2026-05-20' AND '2026-05-22' "
+            "AND tipo_avaliacao = 'regular'"
+        ))
+
+def remanejar_conteudos_obmep_2026():
+    turmas = ", ".join(f"'{turma}'" for turma in sorted(TURMAS_OBMEP_2026))
+
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE conteudos "
+            "SET data_avaliacao = '2026-06-16' "
+            "FROM atribuicoes "
+            "JOIN turmas ON turmas.id = atribuicoes.turma_id "
+            "WHERE conteudos.atribuicao_id = atribuicoes.id "
+            "AND conteudos.data_avaliacao = '2026-06-09' "
+            f"AND UPPER(REPLACE(REPLACE(REPLACE(turmas.nome, ' ', ''), 'º', ''), '°', '')) IN ({turmas})"
+        ))
+
+def garantir_unicidade_conteudo():
+    inspector = inspect(engine)
+    chave_antiga = {"atribuicao_id", "bimestre"}
+
+    with engine.begin() as conn:
+        for constraint in inspector.get_unique_constraints("conteudos"):
+            nome = constraint.get("name")
+            colunas = set(constraint.get("column_names") or [])
+
+            if nome and colunas == chave_antiga:
+                conn.execute(text(f'ALTER TABLE conteudos DROP CONSTRAINT IF EXISTS "{nome}"'))
+
+        for index in inspector.get_indexes("conteudos"):
+            nome = index.get("name")
+            colunas = set(index.get("column_names") or [])
+
+            if nome and index.get("unique") and colunas == chave_antiga:
+                conn.execute(text(f'DROP INDEX IF EXISTS "{nome}"'))
+
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS conteudos_atribuicao_bimestre_tipo_idx "
+            "ON conteudos (atribuicao_id, bimestre, tipo_avaliacao)"
+        ))
+
+garantir_colunas_conteudo()
+remanejar_conteudos_obmep_2026()
+garantir_unicidade_conteudo()
+
 def get_db():
     db = SessionLocal()
     try:
@@ -107,7 +229,7 @@ def get_atribuicoes(
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     # 🔥 ADMIN pode tudo
-    if email == ADMIN_EMAIL:
+    if email in ADMIN_EMAILS:
         return crud.listar_atribuicoes_por_professor(db, professor_id)
 
     professor = db.query(models.Professor).filter(models.Professor.email == email).first()
@@ -125,9 +247,10 @@ def get_atribuicoes(
 def buscar_conteudo(
     atribuicao_id: UUID = Query(...),
     bimestre: int = Query(...),
+    tipo_avaliacao: str = Query("regular"),
     db: Session = Depends(get_db)
 ):
-    conteudo = crud.buscar_conteudo(db, atribuicao_id, bimestre)
+    conteudo = crud.buscar_conteudo(db, atribuicao_id, bimestre, tipo_avaliacao)
 
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
@@ -148,17 +271,115 @@ def salvar_conteudo(
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     # 🔥 ADMIN pode tudo
-    if email != ADMIN_EMAIL:
+    if email not in ADMIN_EMAILS:
         professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
         atribuicao = db.query(models.Atribuicao).filter(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
 
-        if not atribuicao or atribuicao.professor_id != professor.id:
+        if not professor or not atribuicao or atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
 
-    return crud.salvar_conteudo(db, dados)
+    else:
+        atribuicao = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
+
+    validar_avaliacao_conteudo(dados, atribuicao)
+
+    if (
+        dados.tipo_avaliacao == "regular"
+        and
+        atribuicao
+        and dados.data_avaliacao == DATA_OBMEP_2026
+        and turma_tem_obmep_2026(atribuicao.turma.nome)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="09/06/2026 esta reservado para OBMEP. Use 16/06/2026 para essa turma."
+        )
+
+    try:
+        conteudo = crud.salvar_conteudo(db, dados)
+    except SQLAlchemyError as e:
+        db.rollback()
+        print("ERRO AO SALVAR CONTEUDO:", str(e))
+        raise HTTPException(status_code=500, detail="Erro no banco ao salvar conteudo")
+    except Exception as e:
+        db.rollback()
+        print("ERRO INESPERADO AO SALVAR CONTEUDO:", str(e))
+        raise HTTPException(status_code=500, detail="Erro inesperado ao salvar conteudo")
+
+    if not conteudo:
+        raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
+
+    return conteudo
+
+
+@app.put("/conteudos/{conteudo_id}", response_model=schemas.ConteudoResponse)
+def atualizar_conteudo(
+    conteudo_id: UUID,
+    dados: schemas.ConteudoUpdate,
+    email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
+    if not email:
+        raise HTTPException(status_code=401, detail="Não autenticado")
+
+    conteudo_atual = crud.buscar_conteudo_por_id(db, conteudo_id)
+
+    if not conteudo_atual:
+        raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
+
+    if email not in ADMIN_EMAILS:
+        professor = db.query(models.Professor).filter(models.Professor.email == email).first()
+
+        if not professor or conteudo_atual.atribuicao.professor_id != professor.id:
+            raise HTTPException(status_code=403, detail="Sem permissão")
+
+        if dados.atribuicao_id is not None:
+            atribuicao = db.query(models.Atribuicao).filter(
+                models.Atribuicao.id == dados.atribuicao_id
+            ).first()
+
+            if not atribuicao or atribuicao.professor_id != professor.id:
+                raise HTTPException(status_code=403, detail="Sem permissão")
+
+    atribuicao_para_validar = conteudo_atual.atribuicao
+    if dados.atribuicao_id is not None:
+        atribuicao_para_validar = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
+
+    dados_para_validar = schemas.ConteudoCreate(
+        id=conteudo_id,
+        atribuicao_id=dados.atribuicao_id or conteudo_atual.atribuicao_id,
+        bimestre=dados.bimestre if dados.bimestre is not None else conteudo_atual.bimestre,
+        tipo_avaliacao=dados.tipo_avaliacao or conteudo_atual.tipo_avaliacao,
+        conteudo=dados.conteudo if dados.conteudo is not None else conteudo_atual.conteudo,
+        data_avaliacao=dados.data_avaliacao or conteudo_atual.data_avaliacao
+    )
+
+    validar_avaliacao_conteudo(dados_para_validar, atribuicao_para_validar)
+
+    if (
+        dados_para_validar.tipo_avaliacao == "regular"
+        and dados_para_validar.data_avaliacao == DATA_OBMEP_2026
+        and atribuicao_para_validar
+        and turma_tem_obmep_2026(atribuicao_para_validar.turma.nome)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="09/06/2026 está reservado para OBMEP. Use 16/06/2026 para essa turma."
+        )
+
+    conteudo = crud.atualizar_conteudo(db, conteudo_id, dados)
+
+    if not conteudo:
+        raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
+
+    return conteudo
 
 # ==========================================
 # TURMAS
@@ -184,6 +405,7 @@ def get_calendario(turma_id: UUID, db: Session = Depends(get_db)):
 def get_cronograma(
     turma_id: UUID,
     bimestre: int,
+    tipo_avaliacao: str = Query("regular"),
     db: Session = Depends(get_db)
 ):
     resultados = (
@@ -197,7 +419,8 @@ def get_cronograma(
         .join(models.Atribuicao)
         .filter(
             models.Atribuicao.turma_id == turma_id,
-            models.Conteudo.bimestre == bimestre
+            models.Conteudo.bimestre == bimestre,
+            models.Conteudo.tipo_avaliacao == tipo_avaliacao
         )
         .all()
     )
@@ -235,16 +458,19 @@ def salvar_trabalho(
         raise HTTPException(status_code=401, detail="Não autenticado")
 
     # 🔥 ADMIN pode tudo
-    if email != ADMIN_EMAIL:
+    if email not in ADMIN_EMAILS:
         professor = db.query(models.Professor).filter(models.Professor.email == email).first()
 
         atribuicao = db.query(models.Atribuicao).filter(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
 
-        if not atribuicao or atribuicao.professor_id != professor.id:
+        if not professor or not atribuicao or atribuicao.professor_id != professor.id:
             raise HTTPException(status_code=403, detail="Sem permissão")
-
+    else:
+        atribuicao = db.query(models.Atribuicao).filter(
+            models.Atribuicao.id == dados.atribuicao_id
+        ).first()
     return crud.salvar_trabalho(db, dados)
 
 # ==========================================
@@ -276,7 +502,7 @@ def excluir_conteudo(
     if not conteudo:
         raise HTTPException(status_code=404, detail="Conteúdo não encontrado")
 
-    if email != ADMIN_EMAIL and conteudo.atribuicao.professor.email != email:
+    if email not in ADMIN_EMAILS and conteudo.atribuicao.professor.email != email:
         raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(conteudo)
@@ -301,7 +527,7 @@ def excluir_trabalho(
     if not trabalho:
         raise HTTPException(status_code=404, detail="Trabalho não encontrado")
 
-    if email != ADMIN_EMAIL and trabalho.atribuicao.professor.email != email:
+    if email not in ADMIN_EMAILS and trabalho.atribuicao.professor.email != email:
         raise HTTPException(status_code=403, detail="Sem permissão")
 
     db.delete(trabalho)
@@ -392,6 +618,9 @@ def get_todas_atribuicoes(
 ):
     return (
         db.query(models.Atribuicao)
+        .join(models.Atribuicao.professor)
+        .join(models.Atribuicao.turma)
+        .join(models.Atribuicao.disciplina)
         .options(
             joinedload(models.Atribuicao.professor),
             joinedload(models.Atribuicao.turma),
