@@ -33,6 +33,10 @@ ADMIN_EMAILS = {
 TURMAS_OBMEP_2026 = {"6A", "6B", "7A", "7B", "8A", "8B", "8C", "9A", "9B", "9C"}
 DATA_OBMEP_2026 = date(2026, 6, 9)
 DATA_REMANEJADA_OBMEP_2026 = date(2026, 6, 16)
+PERIODOS_SIMULADO_FUND2_2026 = {
+    2: (date(2026, 5, 20), date(2026, 5, 22)),
+    3: (date(2026, 8, 19), date(2026, 8, 21)),
+}
 
 
 def normalizar_nome_turma(nome: str | None):
@@ -50,6 +54,35 @@ def normalizar_nome_turma(nome: str | None):
 
 def turma_tem_obmep_2026(nome: str | None):
     return normalizar_nome_turma(nome) in TURMAS_OBMEP_2026
+
+
+def turma_eh_fundamental2(nome: str | None):
+    turma = normalizar_nome_turma(nome)
+    return bool(turma) and turma[0] in {"6", "7", "8", "9"}
+
+
+def validar_avaliacao_conteudo(dados, atribuicao):
+    if dados.tipo_avaliacao not in {"regular", "simulado"}:
+        raise HTTPException(status_code=400, detail="Tipo de avaliacao invalido.")
+
+    if not atribuicao:
+        raise HTTPException(status_code=404, detail="Atribuicao nao encontrada")
+
+    if dados.tipo_avaliacao == "simulado":
+        periodo = PERIODOS_SIMULADO_FUND2_2026.get(dados.bimestre)
+
+        if not periodo or not turma_eh_fundamental2(atribuicao.turma.nome):
+            raise HTTPException(
+                status_code=400,
+                detail="O simulado esta liberado apenas para turmas do 6o ao 9o ano no 2o e 3o bimestres."
+            )
+
+        inicio, fim = periodo
+        if dados.data_avaliacao < inicio or dados.data_avaliacao > fim:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Data do simulado fora do periodo permitido: {inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}."
+            )
 
 # ==========================================
 # 🔒 SEGURANÇA TOKEN SUPABASE
@@ -253,7 +286,11 @@ def salvar_conteudo(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
 
+    validar_avaliacao_conteudo(dados, atribuicao)
+
     if (
+        dados.tipo_avaliacao == "regular"
+        and
         atribuicao
         and dados.data_avaliacao == DATA_OBMEP_2026
         and turma_tem_obmep_2026(atribuicao.turma.nome)
@@ -315,8 +352,20 @@ def atualizar_conteudo(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
 
+    dados_para_validar = schemas.ConteudoCreate(
+        id=conteudo_id,
+        atribuicao_id=dados.atribuicao_id or conteudo_atual.atribuicao_id,
+        bimestre=dados.bimestre if dados.bimestre is not None else conteudo_atual.bimestre,
+        tipo_avaliacao=dados.tipo_avaliacao or conteudo_atual.tipo_avaliacao,
+        conteudo=dados.conteudo if dados.conteudo is not None else conteudo_atual.conteudo,
+        data_avaliacao=dados.data_avaliacao or conteudo_atual.data_avaliacao
+    )
+
+    validar_avaliacao_conteudo(dados_para_validar, atribuicao_para_validar)
+
     if (
-        dados.data_avaliacao == DATA_OBMEP_2026
+        dados_para_validar.tipo_avaliacao == "regular"
+        and dados_para_validar.data_avaliacao == DATA_OBMEP_2026
         and atribuicao_para_validar
         and turma_tem_obmep_2026(atribuicao_para_validar.turma.nome)
     ):
