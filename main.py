@@ -38,6 +38,10 @@ PERIODOS_SIMULADO_FUND2_2026 = {
     2: (date(2026, 5, 20), date(2026, 5, 22)),
     3: (date(2026, 8, 19), date(2026, 8, 21)),
 }
+PERIODOS_PROVA_BIMESTRAL_2026 = {
+    3: (date(2026, 9, 14), date(2026, 9, 18)),
+}
+LIMITE_PROVAS_BIMESTRAIS_POR_DIA = 2
 
 
 def normalizar_nome_turma(nome: str | None):
@@ -61,7 +65,7 @@ def turma_pode_simulado_fund2(nome: str | None):
     return normalizar_nome_turma(nome) in TURMAS_SIMULADO_FUND2_2026
 
 
-def validar_avaliacao_conteudo(dados, atribuicao):
+def validar_avaliacao_conteudo(db, dados, atribuicao):
     if dados.tipo_avaliacao not in {"regular", "simulado"}:
         raise HTTPException(status_code=400, detail="Tipo de avaliacao invalido.")
 
@@ -82,6 +86,50 @@ def validar_avaliacao_conteudo(dados, atribuicao):
             raise HTTPException(
                 status_code=400,
                 detail=f"Data do simulado fora do periodo permitido: {inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}."
+            )
+
+    if dados.tipo_avaliacao == "regular" and dados.bimestre in PERIODOS_PROVA_BIMESTRAL_2026:
+        inicio, fim = PERIODOS_PROVA_BIMESTRAL_2026[dados.bimestre]
+
+        if dados.data_avaliacao < inicio or dados.data_avaliacao > fim:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Data da prova bimestral fora do periodo permitido: {inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}."
+            )
+
+        conteudo_existente = None
+        if dados.id:
+            conteudo_existente = db.query(models.Conteudo).filter(models.Conteudo.id == dados.id).first()
+
+        if not conteudo_existente:
+            conteudo_existente = (
+                db.query(models.Conteudo)
+                .filter(
+                    models.Conteudo.atribuicao_id == dados.atribuicao_id,
+                    models.Conteudo.bimestre == dados.bimestre,
+                    models.Conteudo.tipo_avaliacao == "regular"
+                )
+                .first()
+            )
+
+        query = (
+            db.query(models.Conteudo)
+            .join(models.Atribuicao)
+            .filter(
+                models.Atribuicao.turma_id == atribuicao.turma_id,
+                models.Conteudo.bimestre == dados.bimestre,
+                models.Conteudo.tipo_avaliacao == "regular",
+                models.Conteudo.data_avaliacao == dados.data_avaliacao
+            )
+        )
+
+        if conteudo_existente:
+            query = query.filter(models.Conteudo.id != conteudo_existente.id)
+
+        if query.count() >= LIMITE_PROVAS_BIMESTRAIS_POR_DIA:
+            raise HTTPException(
+                status_code=400,
+                detail="Limite de 2 materias por dia para a prova bimestral desta turma."
             )
 
 # ==========================================
@@ -286,7 +334,7 @@ def salvar_conteudo(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
 
-    validar_avaliacao_conteudo(dados, atribuicao)
+    validar_avaliacao_conteudo(db, dados, atribuicao)
 
     if (
         dados.tipo_avaliacao == "regular"
@@ -361,7 +409,7 @@ def atualizar_conteudo(
         data_avaliacao=dados.data_avaliacao or conteudo_atual.data_avaliacao
     )
 
-    validar_avaliacao_conteudo(dados_para_validar, atribuicao_para_validar)
+    validar_avaliacao_conteudo(db, dados_para_validar, atribuicao_para_validar)
 
     if (
         dados_para_validar.tipo_avaliacao == "regular"
