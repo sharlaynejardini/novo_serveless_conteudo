@@ -518,7 +518,7 @@ def enviar_whatsapp_zapi(telefone, mensagem):
     return True
 
 
-def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
+def enviar_email_alerta(destinatario, nome, eventos, data_alvo, mensagem_final=None):
     if not smtp_configurado():
         raise RuntimeError("SMTP nao configurado")
 
@@ -540,7 +540,7 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
         f"Ola, {nome}!\n\n"
         f"Em breve: {compromisso}.\n\n"
         f"{lista_eventos_texto}\n\n"
-        "Fique ligado!"
+        f"Fique ligado!{f'\n\n{mensagem_final}' if mensagem_final else ''}"
     )
     mensagem.add_alternative(
         f"""
@@ -549,6 +549,7 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
           <p>Olá, {nome}!</p>
           <p>Fique ligado!</p>
           <ul>{lista_eventos_html}</ul>
+          {f"<p><strong>{mensagem_final}</strong></p>" if mensagem_final else ""}
         </div>
         """,
         subtype="html"
@@ -1089,6 +1090,7 @@ def enviar_alertas_calendario_escolar(
     request: Request,
     data_referencia: date | None = Query(None),
     reenviar: bool = Query(False),
+    mensagem_final: str | None = Query(None),
     db: Session = Depends(get_db)
 ):
     validar_cron_secret(request)
@@ -1149,7 +1151,8 @@ def enviar_alertas_calendario_escolar(
                 professor["email"],
                 professor["nome"],
                 [evento for _, evento, _ in eventos_para_enviar],
-                data_alvo
+                data_alvo,
+                mensagem_final
             )
         except Exception as e:
             db.rollback()
