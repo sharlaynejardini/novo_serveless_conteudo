@@ -364,6 +364,25 @@ def smtp_status():
     }
 
 
+def abrir_servidor_smtp():
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    usar_ssl = os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "sim", "yes"} or smtp_port == 465
+    usar_starttls = os.getenv("SMTP_STARTTLS", "true").lower() not in {"0", "false", "nao", "não", "no"}
+    contexto = ssl.create_default_context()
+
+    if usar_ssl:
+        servidor = smtplib.SMTP_SSL(smtp_host, smtp_port, context=contexto, timeout=30)
+    else:
+        servidor = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+
+    if not usar_ssl and usar_starttls:
+        servidor.starttls(context=contexto)
+
+    servidor.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASSWORD"))
+    return servidor
+
+
 def montar_listas_eventos_email(eventos):
     itens_html = []
     itens_texto = []
@@ -466,17 +485,8 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
         servidor.send_message(mensagem)
 
 
-def enviar_email_cronograma_pebi(destinatario, nome, periodo, tipo_alerta):
-    if not smtp_configurado():
-        raise RuntimeError("SMTP nao configurado")
-
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    smtp_from = os.getenv("SMTP_FROM", smtp_user)
-    usar_ssl = os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "sim", "yes"} or smtp_port == 465
-    usar_starttls = os.getenv("SMTP_STARTTLS", "true").lower() not in {"0", "false", "nao", "não", "no"}
+def montar_email_cronograma_pebi(destinatario, nome, periodo, tipo_alerta):
+    smtp_from = os.getenv("SMTP_FROM", os.getenv("SMTP_USER"))
     turmas_texto = periodo["turmas_texto"]
     intervalo = periodo_pebi_texto(periodo)
     lista_texto = registros_pebi_texto()
@@ -541,18 +551,16 @@ def enviar_email_cronograma_pebi(destinatario, nome, periodo, tipo_alerta):
         """
 
     mensagem.add_alternative(html, subtype="html")
+    return mensagem
 
-    contexto = ssl.create_default_context()
 
-    if usar_ssl:
-        servidor = smtplib.SMTP_SSL(smtp_host, smtp_port, context=contexto, timeout=30)
-    else:
-        servidor = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+def enviar_email_cronograma_pebi(destinatario, nome, periodo, tipo_alerta):
+    if not smtp_configurado():
+        raise RuntimeError("SMTP nao configurado")
 
-    with servidor:
-        if not usar_ssl and usar_starttls:
-            servidor.starttls(context=contexto)
-        servidor.login(smtp_user, smtp_password)
+    mensagem = montar_email_cronograma_pebi(destinatario, nome, periodo, tipo_alerta)
+
+    with abrir_servidor_smtp() as servidor:
         servidor.send_message(mensagem)
 
 
@@ -1153,6 +1161,7 @@ def enviar_alertas_cronograma_pebi(
     enviados = 0
     ignorados = 0
     detalhes = []
+    emails_para_enviar = []
 
     for tipo_alerta, periodo in alertas_do_dia:
         turmas_periodo = set(periodo["turmas"])
@@ -1185,34 +1194,58 @@ def enviar_alertas_cronograma_pebi(
                 ignorados += 1
                 continue
 
-            try:
-                enviar_email_cronograma_pebi(
+            emails_para_enviar.append({
+                "professor": professor,
+                "periodo": periodo,
+                "tipo_alerta": tipo_alerta,
+                "chave": chave,
+                "evento": evento,
+                "ja_enviado": ja_enviado
+            })
+
+    if not emails_para_enviar:
+        return {
+            "message": "Alertas PEBI processados",
+            "data_referencia": hoje.isoformat(),
+            "periodos": len(alertas_do_dia),
+            "professores": len(professores),
+            "enviados": 0,
+            "ignorados": ignorados,
+            "detalhes": detalhes
+        }
+
+    try:
+        with abrir_servidor_smtp() as servidor:
+            for item in emails_para_enviar:
+                professor = item["professor"]
+                mensagem = montar_email_cronograma_pebi(
                     professor["email"],
                     professor["nome"],
-                    periodo,
-                    tipo_alerta
+                    item["periodo"],
+                    item["tipo_alerta"]
                 )
-            except Exception as e:
-                db.rollback()
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Erro ao enviar email PEBI para {professor['email']}: {str(e)}"
-                )
+                servidor.send_message(mensagem)
 
-            if ja_enviado:
-                ja_enviado.enviado_em = datetime.utcnow()
-            else:
-                db.add(models.AlertaCalendarioEnviado(
-                    chave=chave,
-                    email=professor["email"],
-                    data_evento=hoje,
-                    evento=evento,
-                    enviado_em=datetime.utcnow()
-                ))
+                if item["ja_enviado"]:
+                    item["ja_enviado"].enviado_em = datetime.utcnow()
+                else:
+                    db.add(models.AlertaCalendarioEnviado(
+                        chave=item["chave"],
+                        email=professor["email"],
+                        data_evento=hoje,
+                        evento=item["evento"],
+                        enviado_em=datetime.utcnow()
+                    ))
 
-            enviados += 1
+                enviados += 1
 
-        db.commit()
+            db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail=f"Erro ao enviar emails PEBI: {str(e)}"
+        )
 
     return {
         "message": "Alertas PEBI processados",
