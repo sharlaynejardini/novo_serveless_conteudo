@@ -14,6 +14,7 @@ import os
 import re
 import smtplib
 import ssl
+import json
 import urllib.request
 
 import jwt
@@ -326,7 +327,8 @@ def carregar_professores_pebi():
         professores.append({
             "email": email,
             "nome": valor_linha(linha, "NOME") or email,
-            "turma": turma
+            "turma": turma,
+            "telefone": valor_linha(linha, "TELEFONE", "CELULAR", "WHATSAPP")
         })
 
     return professores
@@ -433,6 +435,87 @@ def registros_pebi_html():
 
 def registros_pebi_texto():
     return "\n".join(REGISTROS_OBRIGATORIOS_PEBI)
+
+
+def whatsapp_configurado():
+    return all(os.getenv(nome) for nome in ["ZAPI_INSTANCE_ID", "ZAPI_TOKEN", "ZAPI_CLIENT_TOKEN"])
+
+
+def normalizar_telefone_whatsapp(valor):
+    digitos = re.sub(r"\D", "", valor or "")
+
+    if not digitos:
+        return ""
+
+    if digitos.startswith("55"):
+        return digitos
+
+    if len(digitos) in {10, 11}:
+        return f"55{digitos}"
+
+    return digitos
+
+
+def montar_mensagem_whatsapp_pebi(nome, periodo, tipo_alerta):
+    turmas_texto = periodo["turmas_texto"]
+    intervalo = periodo_pebi_texto(periodo)
+    registros = registros_pebi_texto()
+
+    if tipo_alerta == "inicio":
+        return (
+            f"Olá, *{nome}*!\n\n"
+            f"Este é um lembrete de que, *dos dias {intervalo}*, deverá ser realizado o envio dos registros das turmas *{turmas_texto}* por meio do formulário abaixo:\n\n"
+            f"{FORMULARIO_REGISTROS_PEBI}\n\n"
+            "*Registros a serem informados:*\n\n"
+            f"{registros}\n\n"
+            "Agradecemos pela colaboração!\n\n"
+            "Atenciosamente,\n\n"
+            "*Coordenação Pedagógica*"
+        )
+
+    return (
+        f"Olá, *{nome}*!\n\n"
+        "Passando para lembrar sobre o envio dos registros de atividades.\n\n"
+        "Caso você *já tenha enviado*, desconsidere esta mensagem. 😊\n\n"
+        "Se ainda não realizou o envio, pedimos a gentileza de preenchê-lo pelo link abaixo:\n\n"
+        f"{FORMULARIO_REGISTROS_PEBI}\n\n"
+        f"*Turmas da semana: {turmas_texto}*\n\n"
+        "*Registros:*\n\n"
+        f"{registros}\n\n"
+        "Agradecemos pela colaboração!\n\n"
+        "Atenciosamente,\n\n"
+        "*Coordenação Pedagógica*"
+    )
+
+
+def enviar_whatsapp_zapi(telefone, mensagem):
+    if not whatsapp_configurado():
+        return False
+
+    phone = normalizar_telefone_whatsapp(telefone)
+
+    if not phone:
+        return False
+
+    instance_id = os.getenv("ZAPI_INSTANCE_ID")
+    token = os.getenv("ZAPI_TOKEN")
+    client_token = os.getenv("ZAPI_CLIENT_TOKEN")
+    url = f"https://api.z-api.io/instances/{instance_id}/token/{token}/send-text"
+    payload = json.dumps({"phone": phone, "message": mensagem}).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={
+            "Client-Token": client_token,
+            "Content-Type": "application/json"
+        }
+    )
+
+    with urllib.request.urlopen(request, timeout=30) as resposta:
+        resposta.read()
+
+    return True
 
 
 def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
@@ -1107,7 +1190,17 @@ def get_status_alertas_cronograma_pebi():
 
         return {
             "smtp": smtp_status(),
+            "whatsapp": {
+                "configurado": whatsapp_configurado(),
+                "instance_configurada": bool(os.getenv("ZAPI_INSTANCE_ID")),
+                "token_configurado": bool(os.getenv("ZAPI_TOKEN")),
+                "client_token_configurado": bool(os.getenv("ZAPI_CLIENT_TOKEN"))
+            },
             "professores_pebi_com_email": len(professores),
+            "professores_pebi_com_telefone": len([
+                professor for professor in professores
+                if normalizar_telefone_whatsapp(professor.get("telefone"))
+            ]),
             "periodos_configurados": len(CRONOGRAMA_ENVIO_PEBI),
             "gid_professores_pebi": GID_PROFESSORES_PEBI
         }
@@ -1160,6 +1253,8 @@ def enviar_alertas_cronograma_pebi(
 
     enviados = 0
     ignorados = 0
+    whatsapps_enviados = 0
+    whatsapps_ignorados = 0
     detalhes = []
     emails_para_enviar = []
 
@@ -1211,6 +1306,8 @@ def enviar_alertas_cronograma_pebi(
             "professores": len(professores),
             "enviados": 0,
             "ignorados": ignorados,
+            "whatsapps_enviados": 0,
+            "whatsapps_ignorados": 0,
             "detalhes": detalhes
         }
 
@@ -1225,6 +1322,17 @@ def enviar_alertas_cronograma_pebi(
                     item["tipo_alerta"]
                 )
                 servidor.send_message(mensagem)
+
+                if whatsapp_configurado() and normalizar_telefone_whatsapp(professor.get("telefone")):
+                    mensagem_whatsapp = montar_mensagem_whatsapp_pebi(
+                        professor["nome"],
+                        item["periodo"],
+                        item["tipo_alerta"]
+                    )
+                    enviar_whatsapp_zapi(professor["telefone"], mensagem_whatsapp)
+                    whatsapps_enviados += 1
+                else:
+                    whatsapps_ignorados += 1
 
                 if item["ja_enviado"]:
                     item["ja_enviado"].enviado_em = datetime.utcnow()
@@ -1254,6 +1362,8 @@ def enviar_alertas_cronograma_pebi(
         "professores": len(professores),
         "enviados": enviados,
         "ignorados": ignorados,
+        "whatsapps_enviados": whatsapps_enviados,
+        "whatsapps_ignorados": whatsapps_ignorados,
         "detalhes": detalhes
     }
 
