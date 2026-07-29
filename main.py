@@ -332,21 +332,22 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
     usar_ssl = os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "sim", "yes"} or smtp_port == 465
     usar_starttls = os.getenv("SMTP_STARTTLS", "true").lower() not in {"0", "false", "nao", "não", "no"}
     lista_eventos_html, lista_eventos_texto = montar_listas_eventos_email(eventos)
+    compromisso = eventos[0]["evento"] if len(eventos) == 1 else "compromissos do calendario"
 
     mensagem = EmailMessage()
-    mensagem["Subject"] = f"Em breve: evento - {data_alvo.strftime('%d/%m/%Y')}"
+    mensagem["Subject"] = f"Em breve: {compromisso} - {data_alvo.strftime('%d/%m/%Y')}"
     mensagem["From"] = smtp_from
     mensagem["To"] = destinatario
     mensagem.set_content(
         f"Ola, {nome}!\n\n"
-        "Em breve: evento.\n\n"
+        f"Em breve: {compromisso}.\n\n"
         f"{lista_eventos_texto}\n\n"
         "Fique ligado!"
     )
     mensagem.add_alternative(
         f"""
         <div style="font-family: Arial, sans-serif; color: #1f2937;">
-          <h2>Em breve: evento.</h2>
+          <h2>Em breve: {compromisso}.</h2>
           <p>Olá, {nome}!</p>
           <p>Fique ligado!</p>
           <ul>{lista_eventos_html}</ul>
