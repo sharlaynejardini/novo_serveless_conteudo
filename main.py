@@ -1094,7 +1094,7 @@ def enviar_alertas_calendario_escolar(
     validar_cron_secret(request)
 
     hoje = data_referencia or date.today()
-    data_alvo = hoje + timedelta(days=2)
+    data_alvo = hoje + timedelta(days=3)
     eventos = [
         evento
         for evento in carregar_eventos_calendario()
