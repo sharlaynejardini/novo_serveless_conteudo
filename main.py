@@ -334,23 +334,22 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
     lista_eventos_html, lista_eventos_texto = montar_listas_eventos_email(eventos)
 
     mensagem = EmailMessage()
-    mensagem["Subject"] = f"Alerta de calendario escolar - {data_alvo.strftime('%d/%m/%Y')}"
+    mensagem["Subject"] = f"Em breve: evento - {data_alvo.strftime('%d/%m/%Y')}"
     mensagem["From"] = smtp_from
     mensagem["To"] = destinatario
     mensagem.set_content(
         f"Ola, {nome}!\n\n"
-        "Este e um lembrete automatico dos eventos do calendario escolar daqui a 2 dias:\n\n"
+        "Em breve: evento.\n\n"
         f"{lista_eventos_texto}\n\n"
-        "Sistema de Conteudos Essenciais - Takaoka"
+        "Fique ligado!"
     )
     mensagem.add_alternative(
         f"""
         <div style="font-family: Arial, sans-serif; color: #1f2937;">
-          <h2>Alerta de calendário escolar</h2>
+          <h2>Em breve: evento.</h2>
           <p>Olá, {nome}!</p>
-          <p>Este é um lembrete automático dos eventos do calendário escolar daqui a <strong>2 dias</strong>.</p>
+          <p>Fique ligado!</p>
           <ul>{lista_eventos_html}</ul>
-          <p style="color:#64748b;">Sistema de Conteúdos Essenciais - Takaoka</p>
         </div>
         """,
         subtype="html"
