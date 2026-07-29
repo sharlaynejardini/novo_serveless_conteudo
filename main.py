@@ -861,7 +861,7 @@ def enviar_alertas_calendario_escolar(
                 ignorados += 1
                 continue
 
-            eventos_para_enviar.append((chave, evento))
+            eventos_para_enviar.append((chave, evento, ja_enviado))
 
         if not eventos_para_enviar:
             continue
@@ -870,7 +870,7 @@ def enviar_alertas_calendario_escolar(
             enviar_email_alerta(
                 professor["email"],
                 professor["nome"],
-                [evento for _, evento in eventos_para_enviar],
+                [evento for _, evento, _ in eventos_para_enviar],
                 data_alvo
             )
         except Exception as e:
@@ -880,14 +880,17 @@ def enviar_alertas_calendario_escolar(
                 detail=f"Erro ao enviar email para {professor['email']}: {str(e)}"
             )
 
-        for chave, evento in eventos_para_enviar:
-            db.add(models.AlertaCalendarioEnviado(
-                chave=chave,
-                email=professor["email"],
-                data_evento=evento["data_evento"],
-                evento=evento["evento"],
-                enviado_em=datetime.utcnow()
-            ))
+        for chave, evento, ja_enviado in eventos_para_enviar:
+            if ja_enviado:
+                ja_enviado.enviado_em = datetime.utcnow()
+            else:
+                db.add(models.AlertaCalendarioEnviado(
+                    chave=chave,
+                    email=professor["email"],
+                    data_evento=evento["data_evento"],
+                    evento=evento["evento"],
+                    enviado_em=datetime.utcnow()
+                ))
             enviados += 1
 
         db.commit()
