@@ -293,6 +293,20 @@ def smtp_configurado():
     return all(os.getenv(nome) for nome in obrigatorias)
 
 
+def smtp_status():
+    return {
+        "configurado": smtp_configurado(),
+        "host_configurado": bool(os.getenv("SMTP_HOST")),
+        "porta": int(os.getenv("SMTP_PORT", "587")),
+        "usuario_configurado": bool(os.getenv("SMTP_USER")),
+        "senha_configurada": bool(os.getenv("SMTP_PASSWORD")),
+        "remetente_configurado": bool(os.getenv("SMTP_FROM")),
+        "ssl": os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "sim", "yes"}
+            or os.getenv("SMTP_PORT") == "465",
+        "starttls": os.getenv("SMTP_STARTTLS", "true").lower() not in {"0", "false", "nao", "não", "no"}
+    }
+
+
 def montar_listas_eventos_email(eventos):
     itens_html = []
     itens_texto = []
@@ -315,6 +329,8 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
     smtp_user = os.getenv("SMTP_USER")
     smtp_password = os.getenv("SMTP_PASSWORD")
     smtp_from = os.getenv("SMTP_FROM", smtp_user)
+    usar_ssl = os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "sim", "yes"} or smtp_port == 465
+    usar_starttls = os.getenv("SMTP_STARTTLS", "true").lower() not in {"0", "false", "nao", "não", "no"}
     lista_eventos_html, lista_eventos_texto = montar_listas_eventos_email(eventos)
 
     mensagem = EmailMessage()
@@ -342,8 +358,14 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
 
     contexto = ssl.create_default_context()
 
-    with smtplib.SMTP(smtp_host, smtp_port) as servidor:
-        servidor.starttls(context=contexto)
+    if usar_ssl:
+        servidor = smtplib.SMTP_SSL(smtp_host, smtp_port, context=contexto, timeout=30)
+    else:
+        servidor = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+
+    with servidor:
+        if not usar_ssl and usar_starttls:
+            servidor.starttls(context=contexto)
         servidor.login(smtp_user, smtp_password)
         servidor.send_message(mensagem)
 
@@ -767,6 +789,24 @@ def get_calendario_escolar():
         )
 
 
+@app.get("/alertas/calendario-escolar/status")
+def get_status_alertas_calendario():
+    try:
+        eventos = carregar_eventos_calendario()
+        professores = carregar_professores_calendario()
+
+        return {
+            "smtp": smtp_status(),
+            "eventos_lidos": len(eventos),
+            "professores_com_email": len(professores)
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Erro ao verificar alertas do calendario: {str(e)}"
+        )
+
+
 @app.get("/alertas/calendario-escolar")
 def enviar_alertas_calendario_escolar(
     request: Request,
@@ -826,12 +866,19 @@ def enviar_alertas_calendario_escolar(
         if not eventos_para_enviar:
             continue
 
-        enviar_email_alerta(
-            professor["email"],
-            professor["nome"],
-            [evento for _, evento in eventos_para_enviar],
-            data_alvo
-        )
+        try:
+            enviar_email_alerta(
+                professor["email"],
+                professor["nome"],
+                [evento for _, evento in eventos_para_enviar],
+                data_alvo
+            )
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=502,
+                detail=f"Erro ao enviar email para {professor['email']}: {str(e)}"
+            )
 
         for chave, evento in eventos_para_enviar:
             db.add(models.AlertaCalendarioEnviado(
