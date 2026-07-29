@@ -810,6 +810,7 @@ def get_status_alertas_calendario():
 def enviar_alertas_calendario_escolar(
     request: Request,
     data_referencia: date | None = Query(None),
+    reenviar: bool = Query(False),
     db: Session = Depends(get_db)
 ):
     validar_cron_secret(request)
@@ -856,7 +857,7 @@ def enviar_alertas_calendario_escolar(
                 .first()
             )
 
-            if ja_enviado:
+            if ja_enviado and not reenviar:
                 ignorados += 1
                 continue
 
