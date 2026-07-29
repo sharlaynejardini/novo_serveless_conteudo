@@ -16,6 +16,10 @@
     {
       "path": "/alertas/calendario-escolar",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/alertas/cronograma-envio-pebi",
+      "schedule": "15 10 * * *"
     }
   ]
 }

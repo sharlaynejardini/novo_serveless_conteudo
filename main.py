@@ -56,6 +56,43 @@ PLANILHA_CALENDARIO_ID = os.getenv(
 )
 GID_CALENDARIO_2_SEMESTRE = os.getenv("GID_CALENDARIO_2_SEMESTRE", "1366818204")
 GID_PROFESSORES_CALENDARIO = os.getenv("GID_PROFESSORES_CALENDARIO", "504314047")
+GID_PROFESSORES_PEBI = os.getenv("GID_PROFESSORES_PEBI", "908908081")
+FORMULARIO_REGISTROS_PEBI = "https://forms.gle/jmQxu2UF8QW6SVHi8"
+
+CRONOGRAMA_ENVIO_PEBI = [
+    {"inicio": date(2026, 7, 27), "fim": date(2026, 7, 31), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
+    {"inicio": date(2026, 8, 3), "fim": date(2026, 8, 8), "turmas": ["2A", "2B"], "turmas_texto": "2ºA e 2ºB"},
+    {"inicio": date(2026, 8, 10), "fim": date(2026, 8, 14), "turmas": ["3A", "3B"], "turmas_texto": "3ºA e 3ºB"},
+    {"inicio": date(2026, 8, 17), "fim": date(2026, 8, 21), "turmas": ["5A", "5B"], "turmas_texto": "5ºA e 5ºB"},
+    {"inicio": date(2026, 8, 24), "fim": date(2026, 8, 28), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
+    {"inicio": date(2026, 9, 1), "fim": date(2026, 9, 4), "turmas": ["2A", "2B"], "turmas_texto": "2ºA e 2ºB"},
+    {"inicio": date(2026, 9, 7), "fim": date(2026, 9, 11), "turmas": ["3A", "3B"], "turmas_texto": "3ºA e 3ºB"},
+    {"inicio": date(2026, 9, 14), "fim": date(2026, 9, 18), "turmas": ["5A", "5B"], "turmas_texto": "5ºA e 5ºB"},
+    {"inicio": date(2026, 9, 21), "fim": date(2026, 9, 25), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
+    {"inicio": date(2026, 9, 28), "fim": date(2026, 10, 2), "turmas": ["2A", "2B"], "turmas_texto": "2ºA e 2ºB"},
+    {"inicio": date(2026, 10, 5), "fim": date(2026, 10, 9), "turmas": ["3A", "3B"], "turmas_texto": "3ºA e 3ºB"},
+    {"inicio": date(2026, 10, 12), "fim": date(2026, 10, 16), "turmas": ["5A", "5B"], "turmas_texto": "5ºA e 5ºB"},
+    {"inicio": date(2026, 10, 19), "fim": date(2026, 10, 23), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
+    {"inicio": date(2026, 10, 26), "fim": date(2026, 10, 30), "turmas": ["2A", "2B"], "turmas_texto": "2ºA e 2ºB"},
+    {"inicio": date(2026, 11, 2), "fim": date(2026, 11, 6), "turmas": ["3A", "3B"], "turmas_texto": "3ºA e 3ºB"},
+    {"inicio": date(2026, 11, 9), "fim": date(2026, 11, 13), "turmas": ["5A", "5B"], "turmas_texto": "5ºA e 5ºB"},
+    {"inicio": date(2026, 11, 16), "fim": date(2026, 11, 20), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
+    {"inicio": date(2026, 11, 23), "fim": date(2026, 11, 30), "turmas": ["2A", "2B"], "turmas_texto": "2ºA e 2ºB"},
+    {"inicio": date(2026, 12, 1), "fim": date(2026, 12, 4), "turmas": ["3A", "3B"], "turmas_texto": "3ºA e 3ºB"},
+    {"inicio": date(2026, 12, 7), "fim": date(2026, 12, 11), "turmas": ["5A", "5B"], "turmas_texto": "5ºA e 5ºB"},
+    {"inicio": date(2026, 12, 14), "fim": date(2026, 12, 18), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
+]
+
+REGISTROS_OBRIGATORIOS_PEBI = [
+    "Cantinho da Leitura",
+    "Elefante Letrado",
+    "Matific",
+    "Cultura 10",
+    "Biblioteca",
+    "Atividades dos alunos de inclusão",
+    "PEE",
+    "Avaliações Externas e Diagnósticas (quando houver)",
+]
 
 
 def normalizar_nome_turma(nome: str | None):
@@ -275,6 +312,26 @@ def carregar_professores_calendario():
     return professores
 
 
+def carregar_professores_pebi():
+    linhas = baixar_csv_planilha(GID_PROFESSORES_PEBI)
+    professores = []
+
+    for linha in linhas:
+        email = valor_linha(linha, "EMAIL").lower()
+        turma = normalizar_nome_turma(valor_linha(linha, "TURMA"))
+
+        if "@" not in email or not turma:
+            continue
+
+        professores.append({
+            "email": email,
+            "nome": valor_linha(linha, "NOME") or email,
+            "turma": turma
+        })
+
+    return professores
+
+
 def eventos_calendario_para_resposta():
     return [
         {
@@ -320,6 +377,45 @@ def montar_listas_eventos_email(eventos):
     return "".join(itens_html), "\n".join(itens_texto)
 
 
+def nome_mes_portugues(numero_mes):
+    meses = {
+        1: "janeiro",
+        2: "fevereiro",
+        3: "março",
+        4: "abril",
+        5: "maio",
+        6: "junho",
+        7: "julho",
+        8: "agosto",
+        9: "setembro",
+        10: "outubro",
+        11: "novembro",
+        12: "dezembro",
+    }
+    return meses[numero_mes]
+
+
+def periodo_pebi_texto(periodo):
+    inicio = periodo["inicio"]
+    fim = periodo["fim"]
+
+    if inicio.month == fim.month:
+        return f"{inicio.day:02d} a {fim.day:02d} de {nome_mes_portugues(inicio.month)}"
+
+    return (
+        f"{inicio.day:02d} de {nome_mes_portugues(inicio.month)} "
+        f"a {fim.day:02d} de {nome_mes_portugues(fim.month)}"
+    )
+
+
+def registros_pebi_html():
+    return "".join(f"<li>{registro}</li>" for registro in REGISTROS_OBRIGATORIOS_PEBI)
+
+
+def registros_pebi_texto():
+    return "\n".join(REGISTROS_OBRIGATORIOS_PEBI)
+
+
 def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
     if not smtp_configurado():
         raise RuntimeError("SMTP nao configurado")
@@ -355,6 +451,96 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
         """,
         subtype="html"
     )
+
+    contexto = ssl.create_default_context()
+
+    if usar_ssl:
+        servidor = smtplib.SMTP_SSL(smtp_host, smtp_port, context=contexto, timeout=30)
+    else:
+        servidor = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
+
+    with servidor:
+        if not usar_ssl and usar_starttls:
+            servidor.starttls(context=contexto)
+        servidor.login(smtp_user, smtp_password)
+        servidor.send_message(mensagem)
+
+
+def enviar_email_cronograma_pebi(destinatario, nome, periodo, tipo_alerta):
+    if not smtp_configurado():
+        raise RuntimeError("SMTP nao configurado")
+
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    smtp_from = os.getenv("SMTP_FROM", smtp_user)
+    usar_ssl = os.getenv("SMTP_USE_SSL", "").lower() in {"1", "true", "sim", "yes"} or smtp_port == 465
+    usar_starttls = os.getenv("SMTP_STARTTLS", "true").lower() not in {"0", "false", "nao", "não", "no"}
+    turmas_texto = periodo["turmas_texto"]
+    intervalo = periodo_pebi_texto(periodo)
+    lista_texto = registros_pebi_texto()
+    lista_html = registros_pebi_html()
+
+    mensagem = EmailMessage()
+    mensagem["Subject"] = f"Registros PEBI - {turmas_texto}"
+    mensagem["From"] = smtp_from
+    mensagem["To"] = destinatario
+
+    if tipo_alerta == "inicio":
+        mensagem.set_content(
+            f"Olá, {nome}!\n\n"
+            f"Este é um lembrete de que, dos dias {intervalo}, deverá ser realizado o envio dos registros das turmas {turmas_texto} por meio do formulário abaixo:\n\n"
+            f"{FORMULARIO_REGISTROS_PEBI}\n\n"
+            "Registros a serem informados:\n\n"
+            f"{lista_texto}\n\n"
+            "Agradecemos pela colaboração!\n\n"
+            "Atenciosamente,\n\n"
+            "Coordenação Pedagógica"
+        )
+        html = f"""
+        <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+          <p>Olá, <strong>{nome}</strong>!</p>
+          <p>Este é um lembrete de que, <strong>dos dias {intervalo}</strong>, deverá ser realizado o envio dos registros das turmas <strong>{turmas_texto}</strong> por meio do formulário abaixo:</p>
+          <p><a href="{FORMULARIO_REGISTROS_PEBI}">{FORMULARIO_REGISTROS_PEBI}</a></p>
+          <p><strong>Registros a serem informados:</strong></p>
+          <ul>{lista_html}</ul>
+          <p>Agradecemos pela colaboração!</p>
+          <p>Atenciosamente,</p>
+          <p><strong>Coordenação Pedagógica</strong></p>
+        </div>
+        """
+    else:
+        mensagem.set_content(
+            f"Olá, {nome}!\n\n"
+            "Passando para lembrar sobre o envio dos registros de atividades.\n\n"
+            "Caso você já tenha enviado, desconsidere este e-mail.\n\n"
+            f"Se ainda não realizou o envio, pedimos a gentileza de preenchê-lo pelo link abaixo:\n\n"
+            f"{FORMULARIO_REGISTROS_PEBI}\n\n"
+            f"Turmas da semana: {turmas_texto}\n\n"
+            "Registros:\n\n"
+            f"{lista_texto}\n\n"
+            "Agradecemos pela colaboração!\n\n"
+            "Atenciosamente,\n\n"
+            "Coordenação Pedagógica"
+        )
+        html = f"""
+        <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+          <p>Olá, <strong>{nome}</strong>!</p>
+          <p>Passando para lembrar sobre o envio dos registros de atividades.</p>
+          <p>Caso você <strong>já tenha enviado</strong>, desconsidere este e-mail. 😊</p>
+          <p>Se ainda não realizou o envio, pedimos a gentileza de preenchê-lo pelo link abaixo:</p>
+          <p><a href="{FORMULARIO_REGISTROS_PEBI}">{FORMULARIO_REGISTROS_PEBI}</a></p>
+          <p><strong>Turmas da semana: {turmas_texto}</strong></p>
+          <p><strong>Registros:</strong></p>
+          <ul>{lista_html}</ul>
+          <p>Agradecemos pela colaboração!</p>
+          <p>Atenciosamente,</p>
+          <p><strong>Coordenação Pedagógica</strong></p>
+        </div>
+        """
+
+    mensagem.add_alternative(html, subtype="html")
 
     contexto = ssl.create_default_context()
 
@@ -903,6 +1089,139 @@ def enviar_alertas_calendario_escolar(
         "professores": len(professores),
         "enviados": enviados,
         "ignorados": ignorados
+    }
+
+
+@app.get("/alertas/cronograma-envio-pebi/status")
+def get_status_alertas_cronograma_pebi():
+    try:
+        professores = carregar_professores_pebi()
+
+        return {
+            "smtp": smtp_status(),
+            "professores_pebi_com_email": len(professores),
+            "periodos_configurados": len(CRONOGRAMA_ENVIO_PEBI),
+            "gid_professores_pebi": GID_PROFESSORES_PEBI
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Erro ao verificar alertas do cronograma PEBI: {str(e)}"
+        )
+
+
+@app.get("/alertas/cronograma-envio-pebi")
+def enviar_alertas_cronograma_pebi(
+    request: Request,
+    data_referencia: date | None = Query(None),
+    reenviar: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    validar_cron_secret(request)
+
+    hoje = data_referencia or date.today()
+    alertas_do_dia = []
+
+    for periodo in CRONOGRAMA_ENVIO_PEBI:
+        if periodo["inicio"] == hoje:
+            alertas_do_dia.append(("inicio", periodo))
+        if periodo["fim"] == hoje:
+            alertas_do_dia.append(("fim", periodo))
+
+    if not alertas_do_dia:
+        return {
+            "message": "Nenhum alerta PEBI para hoje",
+            "data_referencia": hoje.isoformat(),
+            "periodos": 0,
+            "professores": 0,
+            "enviados": 0,
+            "ignorados": 0
+        }
+
+    professores = carregar_professores_pebi()
+
+    if not professores:
+        return {
+            "message": "Nenhum professor com email cadastrado na aba PROFESSORES PEBI",
+            "data_referencia": hoje.isoformat(),
+            "periodos": len(alertas_do_dia),
+            "professores": 0,
+            "enviados": 0,
+            "ignorados": 0
+        }
+
+    enviados = 0
+    ignorados = 0
+    detalhes = []
+
+    for tipo_alerta, periodo in alertas_do_dia:
+        turmas_periodo = set(periodo["turmas"])
+        professores_do_periodo = [
+            professor
+            for professor in professores
+            if professor["turma"] in turmas_periodo
+        ]
+
+        detalhes.append({
+            "tipo": tipo_alerta,
+            "turmas": periodo["turmas_texto"],
+            "periodo": periodo_pebi_texto(periodo),
+            "professores_encontrados": len(professores_do_periodo)
+        })
+
+        for professor in professores_do_periodo:
+            evento = (
+                f"cronograma-pebi|{tipo_alerta}|{periodo['inicio'].isoformat()}|"
+                f"{periodo['fim'].isoformat()}|{periodo['turmas_texto']}"
+            )
+            chave = chave_alerta(professor["email"], hoje, evento)
+            ja_enviado = (
+                db.query(models.AlertaCalendarioEnviado)
+                .filter(models.AlertaCalendarioEnviado.chave == chave)
+                .first()
+            )
+
+            if ja_enviado and not reenviar:
+                ignorados += 1
+                continue
+
+            try:
+                enviar_email_cronograma_pebi(
+                    professor["email"],
+                    professor["nome"],
+                    periodo,
+                    tipo_alerta
+                )
+            except Exception as e:
+                db.rollback()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Erro ao enviar email PEBI para {professor['email']}: {str(e)}"
+                )
+
+            if ja_enviado:
+                ja_enviado.enviado_em = datetime.utcnow()
+            else:
+                db.add(models.AlertaCalendarioEnviado(
+                    chave=chave,
+                    email=professor["email"],
+                    data_evento=hoje,
+                    evento=evento,
+                    enviado_em=datetime.utcnow()
+                ))
+
+            enviados += 1
+
+        db.commit()
+
+    return {
+        "message": "Alertas PEBI processados",
+        "data_referencia": hoje.isoformat(),
+        "periodos": len(alertas_do_dia),
+        "professores": len(professores),
+        "enviados": enviados,
+        "ignorados": ignorados,
+        "detalhes": detalhes
     }
 
 # ==========================================
