@@ -335,7 +335,7 @@ def enviar_email_alerta(destinatario, nome, eventos, data_alvo):
     compromisso = eventos[0]["evento"] if len(eventos) == 1 else "compromissos do calendario"
 
     mensagem = EmailMessage()
-    mensagem["Subject"] = f"Em breve: {compromisso} - {data_alvo.strftime('%d/%m/%Y')}"
+    mensagem["Subject"] = f"Evento: {compromisso} - {data_alvo.strftime('%d/%m/%Y')}"
     mensagem["From"] = smtp_from
     mensagem["To"] = destinatario
     mensagem.set_content(
