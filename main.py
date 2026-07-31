@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from datetime import date, datetime, timedelta
 from email.message import EmailMessage
 from uuid import UUID
+from zoneinfo import ZoneInfo
 import csv
 import hashlib
 import os
@@ -59,6 +60,8 @@ GID_CALENDARIO_2_SEMESTRE = os.getenv("GID_CALENDARIO_2_SEMESTRE", "1366818204")
 GID_PROFESSORES_CALENDARIO = os.getenv("GID_PROFESSORES_CALENDARIO", "504314047")
 GID_PROFESSORES_PEBI = os.getenv("GID_PROFESSORES_PEBI", "908908081")
 FORMULARIO_REGISTROS_PEBI = "https://forms.gle/jmQxu2UF8QW6SVHi8"
+APP_TIMEZONE = ZoneInfo(os.getenv("APP_TIMEZONE", "America/Sao_Paulo"))
+DIAS_ANTECEDENCIA_ALERTA_CALENDARIO = int(os.getenv("DIAS_ANTECEDENCIA_ALERTA_CALENDARIO", "3"))
 
 CRONOGRAMA_ENVIO_PEBI = [
     {"inicio": date(2026, 7, 27), "fim": date(2026, 7, 31), "turmas": ["1A", "4A"], "turmas_texto": "1ºA e 4ºA"},
@@ -653,6 +656,14 @@ def chave_alerta(email, data_evento, evento):
     return hashlib.sha256(bruto).hexdigest()
 
 
+def agora_local():
+    return datetime.now(APP_TIMEZONE)
+
+
+def hoje_local():
+    return agora_local().date()
+
+
 def validar_cron_secret(request: Request):
     cron_secret = os.getenv("CRON_SECRET")
 
@@ -1072,10 +1083,22 @@ def get_status_alertas_calendario():
     try:
         eventos = carregar_eventos_calendario()
         professores = carregar_professores_calendario()
+        hoje = hoje_local()
+        data_alvo = hoje + timedelta(days=DIAS_ANTECEDENCIA_ALERTA_CALENDARIO)
+        eventos_data_alvo = [
+            evento for evento in eventos
+            if evento["data_evento"] == data_alvo
+        ]
 
         return {
             "smtp": smtp_status(),
+            "timezone": str(APP_TIMEZONE),
+            "agora_programa": agora_local().isoformat(),
+            "data_referencia": hoje.isoformat(),
+            "dias_antecedencia": DIAS_ANTECEDENCIA_ALERTA_CALENDARIO,
+            "data_alerta": data_alvo.isoformat(),
             "eventos_lidos": len(eventos),
+            "eventos_para_alertar_hoje": len(eventos_data_alvo),
             "professores_com_email": len(professores)
         }
     except Exception as e:
@@ -1095,8 +1118,8 @@ def enviar_alertas_calendario_escolar(
 ):
     validar_cron_secret(request)
 
-    hoje = data_referencia or date.today()
-    data_alvo = hoje + timedelta(days=3)
+    hoje = data_referencia or hoje_local()
+    data_alvo = hoje + timedelta(days=DIAS_ANTECEDENCIA_ALERTA_CALENDARIO)
     eventos = [
         evento
         for evento in carregar_eventos_calendario()
@@ -1106,7 +1129,9 @@ def enviar_alertas_calendario_escolar(
     if not eventos:
         return {
             "message": "Nenhum evento para alertar",
+            "data_referencia": hoje.isoformat(),
             "data_alerta": data_alvo.isoformat(),
+            "dias_antecedencia": DIAS_ANTECEDENCIA_ALERTA_CALENDARIO,
             "eventos": 0,
             "enviados": 0,
             "ignorados": 0
@@ -1117,7 +1142,9 @@ def enviar_alertas_calendario_escolar(
     if not professores:
         return {
             "message": "Nenhum professor com email cadastrado na aba PROFESSORES",
+            "data_referencia": hoje.isoformat(),
             "data_alerta": data_alvo.isoformat(),
+            "dias_antecedencia": DIAS_ANTECEDENCIA_ALERTA_CALENDARIO,
             "eventos": len(eventos),
             "enviados": 0,
             "ignorados": 0
@@ -1178,7 +1205,9 @@ def enviar_alertas_calendario_escolar(
 
     return {
         "message": "Alertas processados",
+        "data_referencia": hoje.isoformat(),
         "data_alerta": data_alvo.isoformat(),
+        "dias_antecedencia": DIAS_ANTECEDENCIA_ALERTA_CALENDARIO,
         "eventos": len(eventos),
         "professores": len(professores),
         "enviados": enviados,
@@ -1190,6 +1219,14 @@ def enviar_alertas_calendario_escolar(
 def get_status_alertas_cronograma_pebi():
     try:
         professores = carregar_professores_pebi()
+        hoje = hoje_local()
+        alertas_do_dia = []
+
+        for periodo in CRONOGRAMA_ENVIO_PEBI:
+            if periodo["inicio"] == hoje:
+                alertas_do_dia.append(("inicio", periodo))
+            if periodo["fim"] == hoje:
+                alertas_do_dia.append(("fim", periodo))
 
         return {
             "smtp": smtp_status(),
@@ -1199,6 +1236,10 @@ def get_status_alertas_cronograma_pebi():
                 "token_configurado": bool(os.getenv("ZAPI_TOKEN")),
                 "client_token_configurado": bool(os.getenv("ZAPI_CLIENT_TOKEN"))
             },
+            "timezone": str(APP_TIMEZONE),
+            "agora_programa": agora_local().isoformat(),
+            "data_referencia": hoje.isoformat(),
+            "alertas_pebi_hoje": len(alertas_do_dia),
             "professores_pebi_com_email": len(professores),
             "professores_pebi_com_telefone": len([
                 professor for professor in professores
@@ -1223,7 +1264,7 @@ def enviar_alertas_cronograma_pebi(
 ):
     validar_cron_secret(request)
 
-    hoje = data_referencia or date.today()
+    hoje = data_referencia or hoje_local()
     alertas_do_dia = []
 
     for periodo in CRONOGRAMA_ENVIO_PEBI:
