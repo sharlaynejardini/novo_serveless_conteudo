@@ -41,6 +41,9 @@ PERIODOS_SIMULADO_FUND2_2026 = {
 PERIODOS_PROVA_BIMESTRAL_2026 = {
     3: (date(2026, 9, 14), date(2026, 9, 18)),
 }
+PERIODOS_TRABALHO_FUND1_2026 = {
+    3: (date(2026, 8, 19), date(2026, 8, 21)),
+}
 LIMITE_PROVAS_BIMESTRAIS_POR_DIA = 2
 
 
@@ -53,6 +56,7 @@ def normalizar_nome_turma(nome: str | None):
         .replace(" ", "")
         .replace("º", "")
         .replace("°", "")
+        .replace("ª", "")
         .replace("ANO", "")
     )
 
@@ -61,8 +65,31 @@ def turma_tem_obmep_2026(nome: str | None):
     return normalizar_nome_turma(nome) in TURMAS_OBMEP_2026
 
 
+def turma_fundamental1(nome: str | None):
+    return re.match(r"^[1-5][A-Z]?$", normalizar_nome_turma(nome)) is not None
+
+
 def turma_pode_simulado_fund2(nome: str | None):
     return normalizar_nome_turma(nome) in TURMAS_SIMULADO_FUND2_2026
+
+
+def validar_trabalho(db, dados, atribuicao):
+    if not atribuicao:
+        raise HTTPException(status_code=404, detail="Atribuicao nao encontrada")
+
+    periodo = PERIODOS_TRABALHO_FUND1_2026.get(dados.bimestre)
+
+    if periodo and turma_fundamental1(atribuicao.turma.nome):
+        inicio, fim = periodo
+
+        if dados.data_entrega < inicio or dados.data_entrega > fim:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Para turmas do 1o ao 5o ano, os trabalhos do 3o bimestre "
+                    f"devem ficar entre {inicio.strftime('%d/%m/%Y')} e {fim.strftime('%d/%m/%Y')}."
+                )
+            )
 
 
 def validar_avaliacao_conteudo(db, dados, atribuicao):
@@ -519,6 +546,9 @@ def salvar_trabalho(
         atribuicao = db.query(models.Atribuicao).filter(
             models.Atribuicao.id == dados.atribuicao_id
         ).first()
+
+    validar_trabalho(db, dados, atribuicao)
+
     return crud.salvar_trabalho(db, dados)
 
 # ==========================================
