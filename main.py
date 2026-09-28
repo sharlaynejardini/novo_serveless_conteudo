@@ -51,8 +51,8 @@ PERIODOS_SIMULADO_FUND2_2026 = {
 PERIODOS_PROVA_BIMESTRAL_2026 = {
     3: (date(2026, 9, 14), date(2026, 9, 18)),
 }
-PERIODOS_TRABALHO_FUND1_2026 = {
-    3: (date(2026, 8, 19), date(2026, 8, 21)),
+PERIODOS_TRABALHO_2026 = {
+    4: (date(2026, 10, 19), date(2026, 10, 23)),
 }
 LIMITE_PROVAS_BIMESTRAIS_POR_DIA = 2
 PLANILHA_CALENDARIO_ID = os.getenv(
@@ -132,16 +132,16 @@ def validar_trabalho(db, dados, atribuicao):
     if not atribuicao:
         raise HTTPException(status_code=404, detail="Atribuicao nao encontrada")
 
-    periodo = PERIODOS_TRABALHO_FUND1_2026.get(dados.bimestre)
+    periodo = PERIODOS_TRABALHO_2026.get(dados.bimestre)
 
-    if periodo and turma_fundamental1(atribuicao.turma.nome):
+    if periodo:
         inicio, fim = periodo
 
         if dados.data_entrega < inicio or dados.data_entrega > fim:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Para turmas do 1o ao 5o ano, os trabalhos do 3o bimestre "
+                    f"Os trabalhos do {dados.bimestre}o bimestre "
                     f"devem ficar entre {inicio.strftime('%d/%m/%Y')} e {fim.strftime('%d/%m/%Y')}."
                 )
             )
