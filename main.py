@@ -47,6 +47,7 @@ DATA_REMANEJADA_OBMEP_2026 = date(2026, 6, 16)
 PERIODOS_SIMULADO_FUND2_2026 = {
     2: (date(2026, 5, 20), date(2026, 5, 22)),
     3: (date(2026, 8, 19), date(2026, 8, 21)),
+    4: (date(2026, 10, 19), date(2026, 10, 21)),
 }
 PERIODOS_PROVA_BIMESTRAL_2026 = {
     3: (date(2026, 9, 14), date(2026, 9, 18)),
@@ -160,7 +161,7 @@ def validar_avaliacao_conteudo(db, dados, atribuicao):
         if not periodo or not turma_pode_simulado_fund2(atribuicao.turma.nome):
             raise HTTPException(
                 status_code=400,
-                detail="O simulado esta liberado apenas para as turmas 6A, 6B, 7A, 7B, 8A, 8B, 8C, 9A, 9B e 9C no 2o e 3o bimestres."
+                detail="O simulado esta liberado apenas para as turmas 6A, 6B, 7A, 7B, 8A, 8B, 8C, 9A, 9B e 9C no 2o, 3o e 4o bimestres."
             )
 
         inicio, fim = periodo
