@@ -51,6 +51,7 @@ PERIODOS_SIMULADO_FUND2_2026 = {
 }
 PERIODOS_PROVA_BIMESTRAL_2026 = {
     3: (date(2026, 9, 14), date(2026, 9, 18)),
+    4: (date(2026, 11, 13), date(2026, 11, 19)),
 }
 PERIODOS_TRABALHO_2026 = {
     4: (date(2026, 10, 19), date(2026, 10, 23)),
