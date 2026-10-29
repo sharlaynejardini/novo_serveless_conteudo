@@ -191,6 +191,10 @@ def validar_avaliacao_conteudo(db, dados, atribuicao):
             if datas_extras:
                 periodo_texto += ", " + ", ".join(data.strftime('%d/%m/%Y') for data in sorted(datas_extras))
 
+        if dados.bimestre == 4:
+            data_permitida = data_permitida and dados.data_avaliacao.weekday() < 5
+            periodo_texto += " (apenas de segunda a sexta-feira)"
+
         if not data_permitida:
             raise HTTPException(
                 status_code=400,
