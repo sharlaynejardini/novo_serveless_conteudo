@@ -53,6 +53,9 @@ PERIODOS_PROVA_BIMESTRAL_2026 = {
     3: (date(2026, 9, 14), date(2026, 9, 18)),
     4: (date(2026, 11, 13), date(2026, 11, 19)),
 }
+DATAS_EXTRAS_PROVA_BIMESTRAL_2026 = {
+    4: {date(2026, 11, 23), date(2026, 11, 24)},
+}
 PERIODOS_TRABALHO_2026 = {
     4: (date(2026, 10, 19), date(2026, 10, 23)),
 }
@@ -174,11 +177,15 @@ def validar_avaliacao_conteudo(db, dados, atribuicao):
 
     if dados.tipo_avaliacao == "regular" and dados.bimestre in PERIODOS_PROVA_BIMESTRAL_2026:
         inicio, fim = PERIODOS_PROVA_BIMESTRAL_2026[dados.bimestre]
+        datas_extras = DATAS_EXTRAS_PROVA_BIMESTRAL_2026.get(dados.bimestre, set())
 
-        if dados.data_avaliacao < inicio or dados.data_avaliacao > fim:
+        if not (inicio <= dados.data_avaliacao <= fim or dados.data_avaliacao in datas_extras):
+            periodo_texto = f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+            if datas_extras:
+                periodo_texto += ", " + ", ".join(data.strftime('%d/%m/%Y') for data in sorted(datas_extras))
             raise HTTPException(
                 status_code=400,
-                detail=f"Data da prova bimestral fora do periodo permitido: {inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}."
+                detail=f"Data da prova bimestral fora do periodo permitido: {periodo_texto}."
             )
 
         conteudo_existente = None
