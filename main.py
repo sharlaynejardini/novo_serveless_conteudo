@@ -183,6 +183,8 @@ def validar_avaliacao_conteudo(db, dados, atribuicao):
             ano_escolar = normalizar_nome_turma(atribuicao.turma.nome)[0]
             dias = (17, 18, 19, 24, 25) if ano_escolar == "5" else (17, 18, 19, 23, 24)
             datas_permitidas = {date(2026, 11, dia) for dia in dias}
+            if normalizar_nome_turma(atribuicao.turma.nome) in {"2A", "2B"}:
+                datas_permitidas.add(date(2026, 11, 16))
             if normalizar_nome_turma(atribuicao.turma.nome) in {"1A", "2A", "2B", "3A", "3B", "4A", "5A", "5B"}:
                 datas_permitidas.add(date(2026, 11, 13))
             data_permitida = dados.data_avaliacao in datas_permitidas
