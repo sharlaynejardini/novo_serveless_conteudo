@@ -187,7 +187,7 @@ def validar_avaliacao_conteudo(db, dados, atribuicao):
                 datas_permitidas.add(date(2026, 11, 16))
             if normalizar_nome_turma(atribuicao.turma.nome) in {"1A", "2A", "2B", "3A", "3B", "4A", "5A", "5B"}:
                 datas_permitidas.add(date(2026, 11, 13))
-            if normalizar_nome_turma(atribuicao.turma.nome) in {"1A", "2A", "2B", "3A", "3B"}:
+            if normalizar_nome_turma(atribuicao.turma.nome) in {"1A", "2A", "2B", "3A", "3B", "4A"}:
                 datas_permitidas = {date(2026, 11, dia) for dia in (11, 12, 13, 16, 17)}
             data_permitida = dados.data_avaliacao in datas_permitidas
             periodo_texto = ", ".join(data.strftime('%d/%m/%Y') for data in sorted(datas_permitidas))
